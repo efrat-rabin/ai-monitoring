@@ -48,12 +48,10 @@ def main():
     parser.add_argument("--in-reply-to-id", type=str, required=True,
                        help="The parent comment ID (from GitHub event)")
     parser.add_argument("--output-file", type=str, default="apply-trigger.json")
-    parser.add_argument("--verbose", type=str, default="true",
-                       help="Enable verbose logging (true/false)")
     args = parser.parse_args()
     
-    # Parse verbose flag from string or environment
-    verbose = os.getenv('VERBOSE', args.verbose).lower() in ('true', '1', 'yes')
+    # Use GitHub Actions' native debug mode
+    verbose = os.getenv('ACTIONS_STEP_DEBUG', 'false').lower() in ('true', '1')
     
     if verbose:
         print(f"[DEBUG] Running check_apply_trigger.py with verbose mode")

@@ -8,12 +8,6 @@ on:
   pull_request_review_comment:
     types: [created]
   workflow_dispatch:
-    inputs:
-      verbose:
-        description: 'Enable verbose logging'
-        required: false
-        default: true
-        type: boolean
 
 permissions:
   contents: read
@@ -38,7 +32,6 @@ jobs:
       repository: ${{ github.repository }}
       post_comment: true
       test_mode: true
-      verbose: ${{ inputs.verbose != false }}
     secrets:
       cursor_api_key: ${{ secrets.CURSOR_API_KEY }}
   
@@ -85,8 +78,7 @@ jobs:
             --repository "${{ github.repository }}" \
             --comment-id "${{ github.event.comment.id }}" \
             --in-reply-to-id "${{ github.event.comment.in_reply_to_id }}" \
-            --output-file trigger-info.json \
-            --verbose "${{ inputs.verbose != false }}"
+            --output-file trigger-info.json
           
           if [ -f trigger-info.json ]; then
             PARENT_BODY=$(cat trigger-info.json | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('parent_comment_body', ''))")
@@ -96,7 +88,6 @@ jobs:
           fi
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          VERBOSE: ${{ inputs.verbose != false }}
       
       - name: Apply logging improvements
         run: |
@@ -109,13 +100,11 @@ jobs:
             --pr-number "${{ github.event.pull_request.number }}" \
             --repository "${{ github.repository }}" \
             --comment-body-file /tmp/comment_body.txt \
-            --comment-id "${{ github.event.comment.id }}" \
-            --verbose "${{ inputs.verbose != false }}"
+            --comment-id "${{ github.event.comment.id }}"
         env:
           GITHUB_TOKEN: ${{ github.token }}
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           COMMENT_BODY: ${{ steps.get-parent.outputs.parent_body }}
-          VERBOSE: ${{ inputs.verbose != false }}
       
       - name: Commit and push changes
         run: |
@@ -138,9 +127,7 @@ jobs:
           python actions/apply-suggested-logs/post_apply_comment.py \
             --pr-number "${{ github.event.pull_request.number }}" \
             --repository "${{ github.repository }}" \
-            --comment-id "${{ github.event.comment.id }}" \
-            --verbose "${{ inputs.verbose != false }}"
+            --comment-id "${{ github.event.comment.id }}"
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          VERBOSE: ${{ inputs.verbose != false }}
 
