@@ -9,92 +9,53 @@ import sys
 import argparse
 import subprocess
 import json
-import re
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
+# Add libs directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "libs"))
+from cursor_client import CursorClient
+
 
 class CursorAnalyzer:
-    """Handles Cursor CLI installation and file analysis."""
+    """Handles file analysis using Cursor CLI."""
     
     def __init__(self, cursor_api_key: Optional[str] = None):
         self.cursor_api_key = cursor_api_key or os.getenv('CURSOR_API_KEY')
-        self.home_dir = Path.home()
-        self.cursor_agent_path = None
+        self.cursor_client = None
         
     def install_cursor_cli(self) -> bool:
         """Install Cursor CLI if not already installed."""
         print("=== Installing Cursor CLI ===")
         
         try:
-            # Check if cursor-agent already exists
-            result = subprocess.run(['which', 'cursor-agent'], 
-                                  capture_output=True, text=True)
-            if result.returncode == 0:
-                self.cursor_agent_path = result.stdout.strip()
-                print(f"✓ cursor-agent already installed at: {self.cursor_agent_path}")
+            self.cursor_client = CursorClient(api_key=self.cursor_api_key)
+            if self.cursor_client.install_cursor_cli():
+                print(f"✓ cursor-agent installed")
                 return True
-            
-            # Install Cursor
-            print("Installing Cursor...")
-            install_cmd = "curl https://cursor.com/install -fsS | bash"
-            subprocess.run(install_cmd, shell=True, check=True)
-            
-            # Search for cursor-agent binary
-            print("Searching for cursor-agent...")
-            search_paths = [
-                self.home_dir / ".cursor" / "bin",
-                self.home_dir / ".local" / "bin",
-                self.home_dir / "bin"
-            ]
-            
-            for path in search_paths:
-                cursor_bin = path / "cursor-agent"
-                if cursor_bin.exists() and cursor_bin.is_file():
-                    self.cursor_agent_path = str(cursor_bin)
-                    print(f"✓ cursor-agent found at: {self.cursor_agent_path}")
-                    # Add to PATH for current process
-                    os.environ['PATH'] = f"{path}:{os.environ['PATH']}"
-                    return True
-            
-            # Last attempt - search entire .cursor directory
-            print("Performing deep search in ~/.cursor/...")
-            cursor_dir = self.home_dir / ".cursor"
-            if cursor_dir.exists():
-                for item in cursor_dir.rglob("cursor-agent"):
-                    if item.is_file():
-                        self.cursor_agent_path = str(item)
-                        print(f"✓ cursor-agent found at: {self.cursor_agent_path}")
-                        os.environ['PATH'] = f"{item.parent}:{os.environ['PATH']}"
-                        return True
-            
-            print("ERROR: cursor-agent not found after installation")
-            return False
-            
+            else:
+                print("ERROR: cursor-agent not found after installation")
+                return False
         except Exception as e:
             print(f"ERROR: Failed to install Cursor CLI: {e}")
             return False
     
     def verify_setup(self) -> bool:
         """Verify cursor-agent is available and API key is set."""
-        if not self.cursor_agent_path:
-            result = subprocess.run(['which', 'cursor-agent'], 
-                                  capture_output=True, text=True)
-            if result.returncode == 0:
-                self.cursor_agent_path = result.stdout.strip()
-            else:
-                print("ERROR: cursor-agent not found in PATH")
+        if not self.cursor_client:
+            try:
+                self.cursor_client = CursorClient(api_key=self.cursor_api_key)
+            except ValueError as e:
+                print(f"ERROR: {e}")
                 return False
         
-        print(f"✓ cursor-agent available at: {self.cursor_agent_path}")
-        
-        if not self.cursor_api_key:
-            print("WARNING: CURSOR_API_KEY not set")
-            print("Add it as a GitHub secret: CURSOR_API_KEY")
+        if self.cursor_client.verify_setup():
+            print(f"✓ cursor-agent available")
+            print("✓ CURSOR_API_KEY is set")
+            return True
+        else:
+            print("ERROR: Cursor CLI setup verification failed")
             return False
-        
-        print("✓ CURSOR_API_KEY is set")
-        return True
     
     def analyze_file(self, file_path: str, prompt: str) -> Dict[str, Any]:
         """Analyze a single file using cursor-agent."""
@@ -110,85 +71,28 @@ class CursorAnalyzer:
         print(f"{'='*50}")
         
         try:
-            # Run cursor-agent with the prompt
-            cmd = [
-                'cursor-agent' if not self.cursor_agent_path else self.cursor_agent_path,
-                '-p', prompt,
-                '--output-format', 'json',
-                file_path
-            ]
+            # Read file content as context
+            with open(file_path, 'r') as f:
+                file_content = f.read()
             
-            env = os.environ.copy()
-            if self.cursor_api_key:
-                env['CURSOR_API_KEY'] = self.cursor_api_key
+            # Use CursorClient to send message
+            if not self.cursor_client:
+                self.cursor_client = CursorClient(api_key=self.cursor_api_key)
+            
+            context = f"File: {file_path}\n\n{file_content}"
             
             print("Running cursor-agent command...")
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                env=env,
-                timeout=300  # 5 minute timeout
-            )
-            
-            raw_output = result.stdout
-            print(f"Raw cursor agent output (first 500 chars):")
-            print(raw_output[:500])
-            print(f"\n{'='*50}")
-            
-            # Parse the result
-            parsed_result = self._parse_cursor_output(raw_output)
+            result = self.cursor_client.send_message(prompt, context=context)
             
             print("Parsed analysis JSON:")
-            print(json.dumps(parsed_result, indent=2))
+            print(json.dumps(result, indent=2))
             print(f"{'='*50}")
             
-            return parsed_result
+            return result if isinstance(result, dict) else {"result": result}
             
-        except subprocess.TimeoutExpired:
-            print("ERROR: cursor-agent command timed out")
-            return {"error": "Analysis timed out"}
         except Exception as e:
             print(f"ERROR: Failed to analyze file: {e}")
             return {"error": str(e)}
-    
-    def _parse_cursor_output(self, raw_output: str) -> Dict[str, Any]:
-        """Parse cursor-agent JSON output and extract the result."""
-        try:
-            # Try to parse the entire output as JSON
-            data = json.loads(raw_output)
-            
-            # Extract the result field
-            if 'result' in data:
-                result_field = data['result']
-                
-                # Check if result is wrapped in markdown code blocks
-                if isinstance(result_field, str) and '```json' in result_field:
-                    # Extract JSON from markdown
-                    match = re.search(r'```json\s*\n(.*?)\n```', result_field, re.DOTALL)
-                    if match:
-                        json_str = match.group(1).strip()
-                        return json.loads(json_str)
-                
-                # Check if result is already JSON
-                if isinstance(result_field, dict):
-                    return result_field
-                
-                # Try to extract JSON object from string
-                if isinstance(result_field, str):
-                    match = re.search(r'\{.*\}', result_field, re.DOTALL)
-                    if match:
-                        return json.loads(match.group(0))
-            
-            # Fallback: return the whole data if no result field
-            return data
-            
-        except json.JSONDecodeError:
-            print("WARNING: Failed to parse cursor-agent output as JSON")
-            return {
-                "issues": [],
-                "summary": "Failed to parse cursor-agent response"
-            }
 
 
 class GitHubPRAnalyzer:
