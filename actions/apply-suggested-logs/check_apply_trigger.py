@@ -8,7 +8,7 @@ import json
 import requests
 
 
-def get_comment_by_id(github_token: str, repository: str, pr_number: int, comment_id: int):
+def get_comment_by_id(github_token: str, repository: str, pr_number: int, comment_id: int, verbose: bool = False):
     """Get a specific review comment by ID."""
     owner, repo = repository.split("/")
     url = f"https://api.github.com/repos/{owner}/{repo}/pulls/comments/{comment_id}"
@@ -17,9 +17,26 @@ def get_comment_by_id(github_token: str, repository: str, pr_number: int, commen
         "Accept": "application/vnd.github+json",
     }
     
+    if verbose:
+        print(f"[DEBUG] API Request: GET {url}")
+        print(f"[DEBUG] Headers: Authorization=Bearer *****, Accept={headers['Accept']}")
+    
     response = requests.get(url, headers=headers)
+    
+    if verbose:
+        print(f"[DEBUG] Response status: {response.status_code}")
+        print(f"[DEBUG] Response size: {len(response.content)} bytes")
+    
     response.raise_for_status()
-    return response.json()
+    data = response.json()
+    
+    if verbose:
+        print(f"[DEBUG] Comment data keys: {list(data.keys())}")
+        print(f"[DEBUG] Comment ID: {data.get('id')}")
+        print(f"[DEBUG] Comment author: {data.get('user', {}).get('login')}")
+        print(f"[DEBUG] Body length: {len(data.get('body', ''))} chars")
+    
+    return data
 
 
 def main():
@@ -31,7 +48,19 @@ def main():
     parser.add_argument("--in-reply-to-id", type=str, required=True,
                        help="The parent comment ID (from GitHub event)")
     parser.add_argument("--output-file", type=str, default="apply-trigger.json")
+    parser.add_argument("--verbose", type=str, default="true",
+                       help="Enable verbose logging (true/false)")
     args = parser.parse_args()
+    
+    # Parse verbose flag from string or environment
+    verbose = os.getenv('VERBOSE', args.verbose).lower() in ('true', '1', 'yes')
+    
+    if verbose:
+        print(f"[DEBUG] Running check_apply_trigger.py with verbose mode")
+        print(f"[DEBUG] PR Number: {args.pr_number}")
+        print(f"[DEBUG] Repository: {args.repository}")
+        print(f"[DEBUG] Trigger comment ID: {args.comment_id}")
+        print(f"[DEBUG] Parent comment ID: {args.in_reply_to_id}")
     
     github_token = os.getenv("GITHUB_TOKEN")
     if not github_token:
@@ -41,10 +70,13 @@ def main():
     # Get the parent comment directly by ID
     print(f"Getting parent comment #{args.in_reply_to_id}")
     try:
-        parent_comment = get_comment_by_id(github_token, args.repository, int(args.pr_number), int(args.in_reply_to_id))
-        trigger_comment = get_comment_by_id(github_token, args.repository, int(args.pr_number), int(args.comment_id))
+        parent_comment = get_comment_by_id(github_token, args.repository, int(args.pr_number), int(args.in_reply_to_id), verbose=verbose)
+        trigger_comment = get_comment_by_id(github_token, args.repository, int(args.pr_number), int(args.comment_id), verbose=verbose)
     except Exception as e:
         print(f"ERROR: Failed to get comments: {e}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
         return 1
     
     # Write result
@@ -56,11 +88,19 @@ def main():
         "parent_comment_body": parent_comment.get('body', '')
     }
     
+    if verbose:
+        print(f"[DEBUG] Writing result to {args.output_file}")
+        print(f"[DEBUG] Result keys: {list(result.keys())}")
+        print(f"[DEBUG] Parent comment body preview: {result['parent_comment_body'][:200]}...")
+    
     with open(args.output_file, 'w') as f:
         json.dump(result, f, indent=2)
     
     print(f"✓ Got parent comment #{result['parent_comment_id']}")
     print(f"  Triggered by comment #{result['comment_id']} from {result['comment_author']}")
+    
+    if verbose:
+        print(f"[DEBUG] Successfully completed check_apply_trigger.py")
     
     return 0
 
