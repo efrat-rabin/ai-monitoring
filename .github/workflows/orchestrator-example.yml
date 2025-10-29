@@ -9,10 +9,19 @@ on:
   issue_comment:
     types: [created]
 
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
 jobs:
   # Job 1: Run analysis when PR is opened/updated
   analyze:
     if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
     uses: ./.github/workflows/analyze-pr-code.yml
     with:
       pr_number: ${{ github.event.pull_request.number }}
@@ -91,6 +100,10 @@ jobs:
   apply-logs:
     if: needs.check-apply-trigger.outputs.should_apply == 'true'
     needs: [check-apply-trigger, get-analysis-results]
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
     uses: ./.github/workflows/apply-suggested-logs.yml
     with:
       pr_number: ${{ github.event.issue.number }}
