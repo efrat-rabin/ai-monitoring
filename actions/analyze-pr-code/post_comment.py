@@ -9,7 +9,10 @@ import sys
 import json
 import argparse
 import requests
+import logging
 from typing import Dict, List, Any
+
+logger = logging.getLogger(__name__)
 
 
 def format_review_comment(issue: Dict[str, Any], file_path: str) -> str:
@@ -96,6 +99,7 @@ def post_issue_comment(
         print(f"✅ Posted comment")
         return True
     except Exception as e:
+        logger.error('post_issue_comment_failed', extra={'error': str(e), 'error_type': type(e).__name__}, exc_info=True)
         print(f"❌ Failed: {e}")
         return False
 
@@ -131,6 +135,7 @@ def post_review_comment(
         response.raise_for_status()
         return True
     except Exception as e:
+        logger.error('post_review_comment_failed', extra={'error': str(e), 'error_type': type(e).__name__, 'file_path': file_path, 'line': line}, exc_info=True)
         print(f"❌ Failed to post review comment on {file_path}:{line} - {e}")
         return False
 
