@@ -70,6 +70,8 @@ Please provide:
 3. Concrete recommendations with code examples showing what log statements to add
 4. Impact on debugging/monitoring if the log remains missing
 
+IMPORTANT: Limit your analysis to the TOP 5 MOST CRITICAL issues only. Focus on the most impactful missing logs.
+
 IMPORTANT: Return results ONLY in valid JSON format with NO markdown, NO explanatory text, NO code blocks.
 Return ONLY the raw JSON object:
 {
