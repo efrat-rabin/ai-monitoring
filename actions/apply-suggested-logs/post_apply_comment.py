@@ -4,10 +4,11 @@
 import os
 import sys
 import argparse
+import json
 import requests
 
 
-def post_comment(github_token: str, repository: str, pr_number: int, comment_id: str = None):
+def post_comment(github_token: str, repository: str, pr_number: int, comment_id: str = None, verbose: bool = False):
     """Post a comment on the PR."""
     owner, repo = repository.split("/")
     
@@ -21,8 +22,27 @@ def post_comment(github_token: str, repository: str, pr_number: int, comment_id:
         "Accept": "application/vnd.github+json",
     }
     
-    response = requests.post(url, headers=headers, json={"body": comment_body})
+    payload = {"body": comment_body}
+    
+    if verbose:
+        print(f"[DEBUG] API Request: POST {url}")
+        print(f"[DEBUG] Headers: Authorization=Bearer *****, Accept={headers['Accept']}")
+        print(f"[DEBUG] Payload: {json.dumps(payload, indent=2)}")
+    
+    response = requests.post(url, headers=headers, json=payload)
+    
+    if verbose:
+        print(f"[DEBUG] Response status: {response.status_code}")
+        print(f"[DEBUG] Response size: {len(response.content)} bytes")
+    
     response.raise_for_status()
+    
+    if verbose:
+        response_data = response.json()
+        print(f"[DEBUG] Comment posted successfully")
+        print(f"[DEBUG] Comment ID: {response_data.get('id')}")
+        print(f"[DEBUG] Comment URL: {response_data.get('html_url')}")
+    
     print("✓ Comment posted")
 
 
@@ -31,15 +51,38 @@ def main():
     parser.add_argument("--pr-number", type=str, required=True)
     parser.add_argument("--repository", type=str, required=True)
     parser.add_argument("--comment-id", type=str)
+    parser.add_argument("--verbose", type=str, default="true",
+                       help="Enable verbose logging (true/false)")
     args = parser.parse_args()
+    
+    # Parse verbose flag from string or environment
+    verbose = os.getenv('VERBOSE', args.verbose).lower() in ('true', '1', 'yes')
+    
+    if verbose:
+        print(f"[DEBUG] Running post_apply_comment.py with verbose mode")
+        print(f"[DEBUG] PR Number: {args.pr_number}")
+        print(f"[DEBUG] Repository: {args.repository}")
+        print(f"[DEBUG] Comment ID: {args.comment_id}")
     
     github_token = os.getenv("GITHUB_TOKEN")
     if not github_token:
         print("ERROR: GITHUB_TOKEN not set")
         return 1
     
-    post_comment(github_token, args.repository, int(args.pr_number), args.comment_id)
-    return 0
+    if verbose:
+        print(f"[DEBUG] GITHUB_TOKEN present: True")
+    
+    try:
+        post_comment(github_token, args.repository, int(args.pr_number), args.comment_id, verbose=verbose)
+        if verbose:
+            print(f"[DEBUG] Successfully completed post_apply_comment.py")
+        return 0
+    except Exception as e:
+        print(f"ERROR: Failed to post comment: {e}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        return 1
 
 
 if __name__ == "__main__":

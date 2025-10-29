@@ -19,13 +19,18 @@ from cursor_client import CursorClient
 class LogApplier:
     """Applies logging improvements to files using AI."""
     
-    def __init__(self, cursor_api_key: str, prompt_file: str = '.github/prompts/apply-logs.txt'):
+    def __init__(self, cursor_api_key: str, prompt_file: str = '.github/prompts/apply-logs.txt', verbose: bool = False):
         self.cursor_client = CursorClient(api_key=cursor_api_key)
         self.cursor_client.install_cursor_cli()
+        self.verbose = verbose
         
         # Load prompt template
         with open(prompt_file, 'r') as f:
             self.prompt_template = f.read()
+        
+        if self.verbose:
+            print(f"[DEBUG] LogApplier initialized")
+            print(f"[DEBUG] Prompt template length: {len(self.prompt_template)} chars")
     
     def apply_logging_improvements(self, file_path: str, issues: List[Dict[str, Any]]) -> bool:
         """Apply logging improvements to a file."""
@@ -39,6 +44,10 @@ class LogApplier:
         with open(file_path, 'r') as f:
             original_content = f.read()
         
+        if self.verbose:
+            print(f"[DEBUG] Original file size: {len(original_content)} chars")
+            print(f"[DEBUG] Number of issues to apply: {len(issues)}")
+        
         # Build prompt with issues
         issues_text = ""
         for idx, issue in enumerate(issues, 1):
@@ -47,13 +56,36 @@ class LogApplier:
             issues_text += f"   Method: {issue.get('method', 'N/A')}\n"
             issues_text += f"   Description: {issue.get('description', 'N/A')}\n"
             issues_text += f"   Recommendation: {issue.get('recommendation', 'N/A')}\n"
+            
+            if self.verbose:
+                print(f"[DEBUG] Issue {idx}: {issue.get('severity')} at line {issue.get('line')} in {issue.get('method')}")
         
         prompt = self.prompt_template.replace('{issues}', issues_text)
         context = f"File: {file_path}\n\nCurrent content:\n{original_content}"
         
+        if self.verbose:
+            print(f"[DEBUG] Prompt length: {len(prompt)} chars")
+            print(f"[DEBUG] Context length: {len(context)} chars")
+            print(f"[DEBUG] Calling Cursor AI...")
+        
         # Get improved code from AI
-        result = self.cursor_client.send_message(prompt, context=context)
+        result = self.cursor_client.send_message(prompt, context=context, verbose=self.verbose)
+        
+        if self.verbose:
+            print(f"[DEBUG] AI result type: {type(result)}")
+            print(f"[DEBUG] AI result preview: {str(result)[:300]}...")
+        
         improved_code = self._extract_code(result)
+        
+        if self.verbose:
+            if improved_code:
+                print(f"[DEBUG] Extracted code length: {len(improved_code)} chars")
+                print(f"[DEBUG] Code comparison:")
+                print(f"  Original: {len(original_content)} chars")
+                print(f"  Improved: {len(improved_code)} chars")
+                print(f"  Same content: {improved_code == original_content}")
+            else:
+                print(f"[DEBUG] No code extracted from AI response")
         
         if not improved_code or improved_code == original_content:
             print(f"No changes for {file_path}")
@@ -64,29 +96,59 @@ class LogApplier:
     
     def _extract_code(self, result: Any) -> Optional[str]:
         """Extract code from AI result."""
+        if self.verbose:
+            print(f"[DEBUG] _extract_code called with type: {type(result)}")
+        
         if isinstance(result, str):
             code = result
+            
+            if self.verbose:
+                print(f"[DEBUG] Processing string result, length: {len(code)} chars")
             
             # Remove markdown code blocks
             python_block = re.search(r'```python\s*\n(.*?)\n```', code, re.DOTALL)
             if python_block:
+                if self.verbose:
+                    print(f"[DEBUG] Found Python markdown block")
                 code = python_block.group(1)
             else:
                 generic_block = re.search(r'```\s*\n(.*?)\n```', code, re.DOTALL)
                 if generic_block:
+                    if self.verbose:
+                        print(f"[DEBUG] Found generic markdown block")
                     code = generic_block.group(1)
+                elif self.verbose:
+                    print(f"[DEBUG] No markdown blocks found, using raw string")
             
             code = code.strip()
             if 'import ' in code or 'def ' in code or 'class ' in code:
+                if self.verbose:
+                    print(f"[DEBUG] Code validated (contains Python keywords)")
                 return code
+            elif self.verbose:
+                print(f"[DEBUG] Code rejected (no Python keywords found)")
         
         elif isinstance(result, dict):
+            if self.verbose:
+                print(f"[DEBUG] Processing dict result with keys: {list(result.keys())}")
+            
             if 'code' in result:
+                if self.verbose:
+                    print(f"[DEBUG] Found 'code' key in dict")
                 return result['code']
             elif 'result' in result:
+                if self.verbose:
+                    print(f"[DEBUG] Found 'result' key, recursing...")
                 return self._extract_code(result['result'])
             elif 'improved_code' in result:
+                if self.verbose:
+                    print(f"[DEBUG] Found 'improved_code' key in dict")
                 return result['improved_code']
+            elif self.verbose:
+                print(f"[DEBUG] No recognized keys found in dict")
+        
+        if self.verbose:
+            print(f"[DEBUG] No code could be extracted")
         
         return None
 
@@ -130,15 +192,33 @@ def main():
     parser.add_argument('--comment-id', type=str)
     parser.add_argument('--prompt-file', type=str, 
                        default='.github/prompts/apply-logs.txt')
+    parser.add_argument('--verbose', type=str, default="true",
+                       help='Enable verbose logging (true/false)')
     
     args = parser.parse_args()
     
+    # Parse verbose flag from string or environment
+    verbose = os.getenv('VERBOSE', args.verbose).lower() in ('true', '1', 'yes')
+    
+    if verbose:
+        print(f"[DEBUG] Running apply-suggested-logs/main.py with verbose mode")
+        print(f"[DEBUG] PR Number: {args.pr_number}")
+        print(f"[DEBUG] Repository: {args.repository}")
+        print(f"[DEBUG] Comment ID: {args.comment_id}")
+        print(f"[DEBUG] Prompt file: {args.prompt_file}")
+    
     # Get comment body from file or argument
     if args.comment_body_file:
+        if verbose:
+            print(f"[DEBUG] Reading comment body from file: {args.comment_body_file}")
         with open(args.comment_body_file, 'r') as f:
             comment_body = f.read()
+        if verbose:
+            print(f"[DEBUG] Comment body length: {len(comment_body)} chars")
     elif args.comment_body:
         comment_body = args.comment_body
+        if verbose:
+            print(f"[DEBUG] Using comment body from argument: {len(comment_body)} chars")
     else:
         print("ERROR: Either --comment-body or --comment-body-file is required")
         return 1
@@ -148,8 +228,11 @@ def main():
         print("ERROR: CURSOR_API_KEY not set")
         return 1
     
+    if verbose:
+        print(f"[DEBUG] CURSOR_API_KEY present: True")
+    
     # Initialize applier
-    applier = LogApplier(cursor_api_key, args.prompt_file)
+    applier = LogApplier(cursor_api_key, args.prompt_file, verbose=verbose)
     
     # Parse issue from comment body
     print("Parsing issue from comment...")
@@ -160,11 +243,16 @@ def main():
         print("Make sure the comment includes hidden JSON metadata: <!-- ISSUE_DATA: {...} -->")
         return 1
     
+    if verbose:
+        print(f"[DEBUG] Parsed issue: {json.dumps(issue, indent=2)}")
+    
     file_path = issue.pop('file')
     print(f"Applying single issue to {file_path}")
     
     if applier.apply_logging_improvements(file_path, [issue]):
         print(f"\n✓ Applied change to {file_path}")
+        if verbose:
+            print(f"[DEBUG] Successfully completed apply-suggested-logs/main.py")
         return 0
     else:
         print(f"\n✗ Failed to apply change")
