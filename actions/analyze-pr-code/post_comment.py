@@ -72,7 +72,7 @@ def post_issue_comment(
     url = f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_number}/comments"
     
     headers = {
-        "Authorization": f"Bearer {github_token}",
+        "Authorization": f"Bearer {github_token}",   
         "Accept": "application/vnd.github+json",
     }
     
@@ -92,7 +92,7 @@ def post_review_comment(
     pr_number: int,
     commit_sha: str,
     file_path: str,
-    line: int,
+    line: int,   
     comment_body: str
 ) -> bool:
     """Post a review comment on a specific line."""
