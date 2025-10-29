@@ -40,6 +40,11 @@ on:
         required: false
         default: true
         type: boolean
+      test_mode:
+        description: 'Use mock data instead of calling Cursor API'
+        required: false
+        default: false
+        type: boolean
     secrets:
       cursor_api_key:
         description: 'Cursor API Key'
