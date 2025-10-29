@@ -91,13 +91,14 @@ class CursorClient:
         
         return bool(self.api_key)
     
-    def send_message(self, prompt: str, context: Optional[str] = None) -> Any:
+    def send_message(self, prompt: str, context: Optional[str] = None, verbose: bool = False) -> Any:
         """
         Send a message to Cursor CLI and get response.
         
         Args:
             prompt: The prompt/question to send
             context: Optional context to include with the prompt
+            verbose: Print debug information
             
         Returns:
             Parsed response from Cursor (dict, str, or original response)
@@ -107,6 +108,12 @@ class CursorClient:
         """
         # Build full prompt
         full_prompt = f"{context}\n\n{prompt}" if context else prompt
+        
+        if verbose:
+            print(f"[DEBUG] Sending to cursor-agent:")
+            print(f"  Prompt length: {len(prompt)} chars")
+            print(f"  Context length: {len(context) if context else 0} chars")
+            print(f"  Full prompt length: {len(full_prompt)} chars")
         
         try:
             # Run cursor-agent
@@ -123,10 +130,35 @@ class CursorClient:
                 timeout=300
             )
             
+            if verbose:
+                print(f"[DEBUG] cursor-agent response:")
+                print(f"  Return code: {result.returncode}")
+                print(f"  Stdout length: {len(result.stdout)} chars")
+                print(f"  Stderr length: {len(result.stderr)} chars")
+                if result.stdout:
+                    print(f"  Stdout preview: {result.stdout[:500]}")
+                if result.stderr:
+                    print(f"  Stderr preview: {result.stderr[:500]}")
+            
             if result.returncode != 0:
                 raise Exception(f"cursor-agent failed: {result.stderr}")
             
-            return self._parse_output(result.stdout)
+            parsed = self._parse_output(result.stdout, verbose=verbose)
+            
+            if verbose:
+                print(f"[DEBUG] Parsed result type: {type(parsed)}")
+                print(f"[DEBUG] Parsed result preview: {str(parsed)[:500]}")
+            
+            # Warn if result is empty
+            if not parsed or (isinstance(parsed, str) and not parsed.strip()):
+                print(f"WARNING: Cursor API returned empty result. This may indicate:")
+                print(f"  - Rate limiting or quota exhausted")
+                print(f"  - API key may not have access")
+                print(f"  - Prompt/context may be too long")
+                if verbose and result.stdout:
+                    print(f"  - Full response: {result.stdout}")
+            
+            return parsed
             
         except subprocess.TimeoutExpired:
             raise Exception("Cursor CLI request timed out")
@@ -135,10 +167,13 @@ class CursorClient:
         except Exception as e:
             raise Exception(f"Cursor CLI error: {e}")
     
-    def _parse_output(self, raw_output: str) -> Any:
+    def _parse_output(self, raw_output: str, verbose: bool = False) -> Any:
         """Parse cursor-agent output."""
         try:
             data = json.loads(raw_output)
+            
+            if verbose:
+                print(f"[DEBUG] Parsed JSON data keys: {list(data.keys()) if isinstance(data, dict) else 'not a dict'}")
             
             # Extract result field if present
             if 'result' in data:

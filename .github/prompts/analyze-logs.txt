@@ -67,7 +67,15 @@ Please provide:
    - LOW: Nice-to-have logs for additional context
 
 2. Specific line numbers or method names where logs are missing
-3. Concrete recommendations with code examples showing what log statements to add
+
+3. PURE CODE recommendation:
+   - The "recommendation" field MUST contain ONLY executable code
+   - NO explanatory text like "Add this:", "You should:", etc.
+   - NO descriptions or comments about what to do
+   - ONLY the exact code statement(s) to add
+   - Example GOOD: logger.error('user_deletion_failed', { userId, error: error.message });
+   - Example BAD: Add error logging before re-throwing: logger.error(...)
+
 4. Impact on debugging/monitoring if the log remains missing
 
 IMPORTANT: Limit your analysis to the TOP 5 MOST CRITICAL issues only per file. Focus on the most impactful missing logs.
@@ -85,7 +93,7 @@ Return format:
           "line": <line_number>,
           "method": "method or function name where log is missing",
           "description": "What log statement is missing and why it's needed",
-          "recommendation": "Specific log statement to add with code example",
+          "recommendation": "PURE CODE ONLY - the exact code to add (no explanatory text, no 'Add this', no descriptions, just the raw code)",
           "impact": "Impact on debugging/monitoring/compliance if not added"
         }
       ],

@@ -9,6 +9,7 @@ import sys
 import argparse
 import subprocess
 import json
+import requests
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
@@ -57,7 +58,7 @@ class CursorAnalyzer:
             print("ERROR: Cursor CLI setup verification failed")
             return False
     
-    def analyze_files(self, file_paths: List[str], prompt: str, test_mode: bool = False) -> List[Dict[str, Any]]:
+    def analyze_files(self, file_paths: List[str], prompt: str, test_mode: bool = False, verbose: bool = True) -> List[Dict[str, Any]]:
         """Analyze multiple files in one request using cursor-agent."""
         print(f"Analyzing {len(file_paths)} files in batch...")
         
@@ -85,19 +86,81 @@ class CursorAnalyzer:
                 print(f"Error reading {file_path}: {e}")
         
         try:
-            result = self.cursor_client.send_message(prompt, context=context)
+            result = self.cursor_client.send_message(prompt, context=context, verbose=verbose)
             
-            # Parse result
+            # Parse result - handle various response formats
             if isinstance(result, list):
+                if verbose:
+                    print(f"[DEBUG] Got list result with {len(result)} items")
                 return result
-            elif isinstance(result, dict) and 'results' in result:
-                return result['results']
+            elif isinstance(result, dict):
+                if verbose:
+                    print(f"[DEBUG] Got dict result with keys: {list(result.keys())}")
+                
+                # Try various dict keys that might contain results
+                for key in ['results', 'analysis', 'files', 'data', 'items']:
+                    if key in result and isinstance(result[key], list):
+                        if verbose:
+                            print(f"[DEBUG] Found results in key '{key}'")
+                        return result[key]
+                
+                # If dict has file path keys, convert to list format
+                if any(isinstance(v, dict) for v in result.values()):
+                    formatted_results = []
+                    for file_path, analysis in result.items():
+                        if isinstance(analysis, dict):
+                            formatted_results.append({
+                                'file': file_path,
+                                'analysis': analysis
+                            })
+                    if formatted_results:
+                        if verbose:
+                            print(f"[DEBUG] Formatted {len(formatted_results)} file results from dict")
+                        return formatted_results
+                
+                # Single file analysis - wrap in list
+                if verbose:
+                    print(f"[DEBUG] Wrapping dict as single file analysis")
+                return [{
+                    'file': file_paths[0] if file_paths else 'unknown',
+                    'analysis': result
+                }]
+            elif isinstance(result, str):
+                if verbose:
+                    print(f"[DEBUG] Got string result, length: {len(result)} chars")
+                
+                # Try to parse string as JSON
+                try:
+                    parsed = json.loads(result)
+                    if isinstance(parsed, list):
+                        if verbose:
+                            print(f"[DEBUG] Parsed string as list with {len(parsed)} items")
+                        return parsed
+                    elif isinstance(parsed, dict):
+                        if verbose:
+                            print(f"[DEBUG] Parsed string as dict")
+                        return [{'file': file_paths[0] if file_paths else 'unknown', 'analysis': parsed}]
+                except json.JSONDecodeError:
+                    if verbose:
+                        print(f"[DEBUG] String is not valid JSON")
+                    pass
+                
+                # Return raw text as analysis
+                if verbose:
+                    print(f"[DEBUG] Wrapping string as analysis response")
+                return [{
+                    'file': file_paths[0] if file_paths else 'unknown',
+                    'analysis': {'response': result}
+                }]
             else:
-                print(f"Unexpected result format: {type(result)}")
+                print(f"ERROR: Unexpected result format: {type(result)}")
+                print(f"Result preview: {str(result)[:500]}")
                 return []
                 
         except Exception as e:
             print(f"ERROR: Failed to analyze files: {e}")
+            import traceback
+            traceback.print_exc()
             return []
     
     def _generate_mock_results(self, file_paths: List[str]) -> List[Dict[str, Any]]:
@@ -114,7 +177,7 @@ class CursorAnalyzer:
                             "line": 95,
                             "method": "send_message",
                             "description": "The core method that performs external API calls to cursor-agent lacks any logging. No entry logs with request details, no success logs, no timing metrics, and errors are raised without being logged first. This makes it impossible to troubleshoot API call failures, track request volume, or monitor performance.",
-                            "recommendation": "Add structured logging: log entry with prompt length/truncated prompt, log success with response metadata, log duration/timing, and log errors before raising. Example: logger.info('sending_cursor_message', extra={'prompt_length': len(prompt), 'has_context': bool(context), 'correlation_id': correlation_id}); start_time = time.time(); ...; logger.info('cursor_message_success', extra={'duration_ms': (time.time() - start_time) * 1000, 'response_size': len(str(result))}); logger.error('cursor_message_failed', extra={'error': str(e), 'stderr': result.stderr}, exc_info=True)",
+                            "recommendation": "logger.info('sending_cursor_message', extra={'prompt_length': len(prompt), 'has_context': bool(context), 'correlation_id': correlation_id});\nstart_time = time.time();\n# ... existing code ...\nlogger.info('cursor_message_success', extra={'duration_ms': (time.time() - start_time) * 1000, 'response_size': len(str(result))});\n# On error:\nlogger.error('cursor_message_failed', extra={'error': str(e), 'stderr': result.stderr}, exc_info=True)",
                             "impact": "Without logs in send_message, production issues with Cursor API calls cannot be diagnosed. Cannot determine request rates, latency patterns, failure modes, or correlate errors with specific requests. Violates observability best practices for external API integrations."
                         },
                         {
@@ -123,7 +186,7 @@ class CursorAnalyzer:
                             "line": 75,
                             "method": "install_cursor_cli",
                             "description": "Generic exception handler catches all exceptions and returns False without logging. Installation failures are completely silent, making it impossible to debug why installation attempts fail in production.",
-                            "recommendation": "Log exceptions with full context before returning False. Example: except Exception as e: logger.error('cursor_cli_install_failed', extra={'error': str(e), 'error_type': type(e).__name__}, exc_info=True); return False",
+                            "recommendation": "except Exception as e:\n    logger.error('cursor_cli_install_failed', extra={'error': str(e), 'error_type': type(e).__name__}, exc_info=True)\n    return False",
                             "impact": "Installation failures in production environments cannot be diagnosed. Security issues, permission problems, network failures, or binary corruption go undetected. No audit trail for installation attempts."
                         },
                         {
@@ -132,7 +195,7 @@ class CursorAnalyzer:
                             "line": 119,
                             "method": "send_message",
                             "description": "External API call to cursor-agent subprocess lacks performance timing. No duration metrics collected, no SLA/SLO monitoring possible, cannot identify slow requests or timeout patterns.",
-                            "recommendation": "Add timing instrumentation around subprocess call. Example: import time; start_time = time.time(); result = subprocess.run(...); duration_ms = (time.time() - start_time) * 1000; logger.info('cursor_agent_call_completed', extra={'duration_ms': duration_ms, 'returncode': result.returncode}); also log warning if duration exceeds threshold (e.g., >5s)",
+                            "recommendation": "import time\nstart_time = time.time()\nresult = subprocess.run(...)\nduration_ms = (time.time() - start_time) * 1000\nlogger.info('cursor_agent_call_completed', extra={'duration_ms': duration_ms, 'returncode': result.returncode})\nif duration_ms > 5000:\n    logger.warning('cursor_agent_slow_request', extra={'duration_ms': duration_ms})",
                             "impact": "Cannot monitor API latency, detect performance degradation, or alert on slow requests. Cannot establish SLAs or track performance over time. Debugging slow requests is impossible without timing data."
                         },
                         {
@@ -141,7 +204,7 @@ class CursorAnalyzer:
                             "line": 132,
                             "method": "send_message",
                             "description": "Exception handlers raise errors without logging them first. Timeout, FileNotFoundError, and generic exceptions are raised but not logged, making error tracking and alerting impossible. Errors lack context like prompt length, correlation IDs, and request metadata.",
-                            "recommendation": "Log all exceptions with full context before raising. Example: except subprocess.TimeoutExpired as e: logger.error('cursor_agent_timeout', extra={'timeout_seconds': 300, 'prompt_length': len(prompt)}, exc_info=True); raise; except FileNotFoundError as e: logger.error('cursor_agent_not_found', extra={'search_paths': search_paths}, exc_info=True); raise; except Exception as e: logger.error('cursor_agent_error', extra={'error': str(e), 'error_type': type(e).__name__, 'prompt_length': len(prompt)}, exc_info=True); raise",
+                            "recommendation": "except subprocess.TimeoutExpired as e:\n    logger.error('cursor_agent_timeout', extra={'timeout_seconds': 300, 'prompt_length': len(prompt)}, exc_info=True)\n    raise\nexcept FileNotFoundError as e:\n    logger.error('cursor_agent_not_found', extra={'search_paths': search_paths}, exc_info=True)\n    raise\nexcept Exception as e:\n    logger.error('cursor_agent_error', extra={'error': str(e), 'error_type': type(e).__name__, 'prompt_length': len(prompt)}, exc_info=True)\n    raise",
                             "impact": "Errors cannot be tracked, monitored, or alerted on. Error rates are unknown. Cannot correlate errors with specific requests or identify patterns. Troubleshooting production incidents requires code changes instead of log analysis."
                         },
                         {
@@ -150,7 +213,7 @@ class CursorAnalyzer:
                             "line": 164,
                             "method": "_parse_output",
                             "description": "Silent exception catch at line 164 when JSON parsing fails - exception is caught but not logged. Additionally, JSONDecodeError at line 171 is caught but not logged, making it impossible to debug parsing failures or track malformed response patterns.",
-                            "recommendation": "Log parsing failures with context. Example: except json.JSONDecodeError as e: logger.warning('cursor_response_parse_failed', extra={'raw_output_preview': raw_output[:200], 'error': str(e)}, exc_info=True); return raw_output. Also log at line 164: except Exception as e: logger.warning('json_extraction_failed', extra={'error': str(e), 'result_field': str(result_field)[:200]}, exc_info=True); pass",
+                            "recommendation": "except json.JSONDecodeError as e:\n    logger.warning('cursor_response_parse_failed', extra={'raw_output_preview': raw_output[:200], 'error': str(e)}, exc_info=True)\n    return raw_output\n# At line 164:\nexcept Exception as e:\n    logger.warning('json_extraction_failed', extra={'error': str(e), 'result_field': str(result_field)[:200]}, exc_info=True)\n    pass",
                             "impact": "Parsing failures go undetected, making it impossible to identify when Cursor API response format changes or becomes malformed. Cannot track parse error rates or alert on parsing issues."
                         }
                     ],
@@ -169,48 +232,51 @@ class GitHubPRAnalyzer:
         self.pr_number = pr_number
     
     def get_changed_files(self, file_patterns: Optional[List[str]] = None) -> List[str]:
-        """Get list of changed files in the PR."""
-        if file_patterns is None:
-            file_patterns = ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx', 
-                           '**/*.py', '**/*.go']
-        
+        """Get list of changed files in the PR using GitHub API."""
         print(f"Getting changed files for PR #{self.pr_number}...")
         
         try:
-            # Use git diff to get changed files (only files in the diff)
-            result = subprocess.run(
-                ['git', 'diff', '--name-only', '--diff-filter=ACMR', 'origin/main...HEAD'],
-                capture_output=True,
-                text=True,
-                check=True
-            )
+            # Use GitHub API to get PR files
+            api_url = f"https://api.github.com/repos/{self.repository}/pulls/{self.pr_number}/files"
+            headers = {
+                'Authorization': f'token {self.github_token}',
+                'Accept': 'application/vnd.github.v3+json'
+            }
             
-            all_files = [f.strip() for f in result.stdout.split('\n') if f.strip()]
+            response = requests.get(api_url, headers=headers)
+            response.raise_for_status()
             
-            # Filter by file patterns and verify files exist
-            filtered_files = []
-            for file in all_files:
-                # Check if file exists (not deleted)
-                if not os.path.exists(file):
-                    print(f"Skipping {file} - file deleted")
-                    continue
+            pr_files = response.json()
+            print(f"Found {len(pr_files)} total files in PR")
+            
+            # Extract filenames (only added or modified, not deleted)
+            changed_files = []
+            for file_info in pr_files:
+                status = file_info.get('status', '')
+                filename = file_info.get('filename', '')
                 
-                file_path = Path(file)
-                for pattern in file_patterns:
-                    # Simple pattern matching
-                    pattern_ext = pattern.split('.')[-1]
-                    if file.endswith(f'.{pattern_ext}'):
-                        filtered_files.append(file)
-                        break
+                # Include: added, modified, renamed, copied
+                # Exclude: removed, deleted
+                if status in ['added', 'modified', 'renamed', 'copied'] and filename:
+                    # Check if file exists locally
+                    if not os.path.exists(filename):
+                        print(f"  - {filename} ({status}) - file not found locally, skipping")
+                        continue
+                    
+                    changed_files.append(filename)
+                    print(f"  - {filename} ({status})")
             
-            print(f"Found {len(filtered_files)} changed files in PR diff")
-            if filtered_files:
-                print(f"Files: {', '.join(filtered_files)}")
+            print(f"Found {len(changed_files)} files to analyze")
+            if changed_files:
+                print(f"Files to analyze: {', '.join(changed_files)}")
             
-            return filtered_files
+            return changed_files
             
-        except subprocess.CalledProcessError as e:
-            print(f"ERROR: Failed to get changed files: {e}")
+        except requests.exceptions.RequestException as e:
+            print(f"ERROR: Failed to get changed files from GitHub API: {e}")
+            return []
+        except Exception as e:
+            print(f"ERROR: Unexpected error getting changed files: {e}")
             return []
 
 
@@ -235,6 +301,7 @@ def main():
     cursor_api_key = os.getenv('CURSOR_API_KEY')
     pr_number = args.pr_number or os.getenv('PR_NUMBER')
     repository = args.repository or os.getenv('REPOSITORY')
+    verbose = os.getenv('VERBOSE', 'true').lower() in ('true', '1', 'yes')
     
     print("=== Analyze PR Code Action ===")
     print(f"PR Number: {pr_number}")
@@ -287,11 +354,20 @@ def main():
         # Write empty results
         with open(args.output_file, 'w') as f:
             json.dump([], f, indent=2)
+        
+        # Set output for GitHub Actions
+        github_output = os.getenv('GITHUB_OUTPUT')
+        if github_output:
+            with open(github_output, 'a') as f:
+                f.write("has_issues=false\n")
+                f.write("total_issues=0\n")
+        
+        print("\n✓ No files to analyze - skipping")
         return 0
     
     # Analyze all files in one request
     print(f"\n=== Analyzing {len(changed_files)} files ===\n")
-    results = cursor.analyze_files(changed_files, prompt, test_mode=args.test_mode)
+    results = cursor.analyze_files(changed_files, prompt, test_mode=args.test_mode, verbose=verbose)
     
     # Write results to file
     print(f"\n=== Analysis Complete ===")
@@ -300,6 +376,31 @@ def main():
     
     print(f"Results written to {args.output_file}")
     print(f"Total files analyzed: {len(results)}")
+    
+    # Check if any issues were found
+    total_issues = 0
+    for result in results:
+        if 'analysis' in result and 'issues' in result['analysis']:
+            total_issues += len(result['analysis']['issues'])
+    
+    print(f"Total issues found: {total_issues}")
+    
+    # Set output for GitHub Actions
+    github_output = os.getenv('GITHUB_OUTPUT')
+    if github_output:
+        with open(github_output, 'a') as f:
+            f.write(f"has_issues={'true' if total_issues > 0 else 'false'}\n")
+            f.write(f"total_issues={total_issues}\n")
+    
+    # Print results to logs if verbose is enabled
+    if verbose:
+        print(f"\n=== Analysis Results JSON ===")
+        print(json.dumps(results, indent=2))
+        print(f"=== End Analysis Results ===\n")
+    
+    # Exit with message if no issues found
+    if total_issues == 0:
+        print("\n✓ No issues found - analysis complete!")
     
     return 0
 
