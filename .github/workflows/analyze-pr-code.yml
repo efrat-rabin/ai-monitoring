@@ -26,7 +26,7 @@ on:
         default: true
         type: boolean
       verbose:
-        description: 'Print analysis results to logs'
+        description: 'Verbose logs'
         required: false
         default: true
         type: boolean
@@ -51,7 +51,7 @@ on:
         default: false
         type: boolean
       verbose:
-        description: 'Print analysis results to logs'
+        description: 'Verbose logs'
         required: false
         default: true
         type: boolean
