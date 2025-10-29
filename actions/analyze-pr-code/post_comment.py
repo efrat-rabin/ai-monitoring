@@ -12,13 +12,26 @@ import requests
 from typing import Dict, List, Any
 
 
-def format_review_comment(issue: Dict[str, Any]) -> str:
+def format_review_comment(issue: Dict[str, Any], file_path: str) -> str:
     """Format a single issue as a review comment."""
     severity = issue.get("severity", "MEDIUM")
     category = issue.get("category", "general")
-    method = issue.get("method", "N/A") 
+    method = issue.get("method", "N/A")
+    line = issue.get("line", "N/A")
     
-    comment = f"**🤖 {severity}** - {category}\n\n"
+    # Include metadata as hidden JSON for parsing
+    metadata = {
+        "file": file_path,
+        "severity": severity,
+        "category": category,
+        "method": method,
+        "line": line,
+        "description": issue.get("description", ""),
+        "recommendation": issue.get("recommendation", ""),
+        "impact": issue.get("impact", "")
+    }
+    
+    comment = f"**🤖 {severity}** - {category} in `{method}`\n\n"
     
     if "description" in issue:
         comment += f"{issue['description']}\n\n"
@@ -30,7 +43,8 @@ def format_review_comment(issue: Dict[str, Any]) -> str:
         comment += f"**Impact:** {issue['impact']}\n\n"
     
     comment += "---\n"
-    comment += "Reply with `/apply-logs` to apply this change automatically."
+    comment += "Reply with `/apply-logs` to apply this change automatically.\n\n"
+    comment += f"<!-- ISSUE_DATA: {json.dumps(metadata)} -->"
     
     return comment
 
@@ -172,7 +186,7 @@ def main():
             method = issue.get("method", "N/A")
             print(f"Posting review comment on {file_path}:{line} ({method})")
             
-            comment = format_review_comment(issue)
+            comment = format_review_comment(issue, file_path)
             
             if post_review_comment(
                 github_token,
