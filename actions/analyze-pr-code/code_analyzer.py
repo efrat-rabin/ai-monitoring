@@ -115,7 +115,7 @@ class GitHubPRAnalyzer:
             # Use git diff to get changed files
             # Assumes we're in a checked-out repository
             result = subprocess.run(
-                ['git', 'diff', '--name-only', 'origin/main...HEAD'],
+                ['git', 'diff', '--name-only', 'main...HEAD'],
                 capture_output=True,
                 text=True,
                 check=True
