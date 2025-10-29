@@ -13,6 +13,5 @@ jobs:
       pr_number: '${{ github.event.pull_request.number }}'
       repository: ${{ github.repository }}
     secrets:
-      git_token: ${{ secrets.GITHUB_TOKEN }}
       cursor_api_key: ${{ secrets.CURSOR_API_KEY }}
 

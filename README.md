@@ -42,9 +42,11 @@ Analyzes pull request code using Cursor AI to provide insights and recommendatio
 **Inputs:**
 - `pr_number` - Pull request number (optional)
 - `repository` - Repository in format `owner/repo` (optional)
-- `git_token` - GitHub token for API access (required)
-- `cursor_api_key` - Cursor API key for AI analysis (required)
-- `prompt_file` - Path to prompt file (default: `.github/prompts/analyze-logs.txt`)
+- `cursor_api_key` - Cursor API key for AI analysis (optional, uses `CURSOR_API_KEY` secret by default)
+
+**Required Secrets:**
+- `BOT_GITHUB_TOKEN` - GitHub token with repo access (used automatically)
+- `CURSOR_API_KEY` - Cursor API key for AI analysis
 
 ### 2. Apply Suggested Logs
 
@@ -97,9 +99,10 @@ Or using the GitHub CLI:
 gh workflow run analyze-pr-code.yml \
   --repo your-org/ai-monitoring \
   -f pr_number=123 \
-  -f repository=your-org/your-repo \
-  -f git_token=$GITHUB_TOKEN
+  -f repository=your-org/your-repo
 ```
+
+**Note:** The workflow uses the `BOT_GITHUB_TOKEN` secret automatically. Make sure it's configured in your repository secrets.
 
 ## Development
 
