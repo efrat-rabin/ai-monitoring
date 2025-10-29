@@ -83,14 +83,20 @@ jobs:
       
       - name: Apply logging improvements
         run: |
+          # Write comment body to file to avoid shell escaping issues
+          echo "$COMMENT_BODY" > /tmp/comment_body.txt
+          
+          echo "Debug: Comment body written to file (size: $(wc -c < /tmp/comment_body.txt) bytes)"
+          
           python actions/apply-suggested-logs/main.py \
             --pr-number "${{ github.event.pull_request.number }}" \
             --repository "${{ github.repository }}" \
-            --comment-body "${{ steps.get-parent.outputs.parent_body }}" \
+            --comment-body-file /tmp/comment_body.txt \
             --comment-id "${{ github.event.comment.id }}"
         env:
           GITHUB_TOKEN: ${{ github.token }}
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          COMMENT_BODY: ${{ steps.get-parent.outputs.parent_body }}
       
       - name: Commit and push changes
         run: |

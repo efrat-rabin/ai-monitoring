@@ -127,13 +127,25 @@ def main():
     parser = argparse.ArgumentParser(description='Apply suggested logs from review comment')
     parser.add_argument('--pr-number', type=str, required=True)
     parser.add_argument('--repository', type=str, required=True)
-    parser.add_argument('--comment-body', type=str, required=True,
+    parser.add_argument('--comment-body', type=str,
                        help='Review comment body with hidden JSON metadata')
+    parser.add_argument('--comment-body-file', type=str,
+                       help='File containing review comment body')
     parser.add_argument('--comment-id', type=str)
     parser.add_argument('--prompt-file', type=str, 
                        default='.github/prompts/apply-logs.txt')
     
     args = parser.parse_args()
+    
+    # Get comment body from file or argument
+    if args.comment_body_file:
+        with open(args.comment_body_file, 'r') as f:
+            comment_body = f.read()
+    elif args.comment_body:
+        comment_body = args.comment_body
+    else:
+        print("ERROR: Either --comment-body or --comment-body-file is required")
+        return 1
     
     cursor_api_key = os.getenv('CURSOR_API_KEY')
     if not cursor_api_key:
@@ -145,7 +157,7 @@ def main():
     
     # Parse issue from comment body
     print("Parsing issue from comment...")
-    issue = parse_issue_from_comment(args.comment_body)
+    issue = parse_issue_from_comment(comment_body)
     
     if not issue:
         print("ERROR: Could not parse issue from comment")
