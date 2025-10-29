@@ -25,6 +25,11 @@ on:
         required: false
         default: true
         type: boolean
+      verbose:
+        description: 'Verbose logs'
+        required: false
+        default: true
+        type: boolean
   workflow_call:
     inputs:
       pr_number:
@@ -45,6 +50,11 @@ on:
         required: false
         default: false
         type: boolean
+      verbose:
+        description: 'Verbose logs'
+        required: false
+        default: true
+        type: boolean
     secrets:
       cursor_api_key:
         description: 'Cursor API Key'
@@ -62,17 +72,23 @@ jobs:
       results-file: analysis-results.json
     
     steps:
+      - name: Get PR branch ref (manual trigger)
+        if: github.event_name == 'workflow_dispatch' && inputs.pr_number
+        id: pr-ref
+        run: |
+          # Get PR head ref using GitHub API
+          PR_DATA=$(gh pr view ${{ inputs.pr_number }} --json headRefName,headRepository --repo ${{ inputs.repository || github.repository }})
+          HEAD_REF=$(echo "$PR_DATA" | jq -r '.headRefName')
+          echo "ref=$HEAD_REF" >> $GITHUB_OUTPUT
+          echo "Checking out PR branch: $HEAD_REF"
+        env:
+          GH_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN || github.token }}
+      
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+          ref: ${{ steps.pr-ref.outputs.ref || github.event.pull_request.head.sha || github.ref }}
           fetch-depth: 0
-      
-      - name: Fetch base branch
-        run: |
-          git fetch origin main:main
-          echo "Comparing against origin/main"
-          git diff --name-only main...HEAD | head -10
       
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -102,6 +118,7 @@ jobs:
           CURSOR_API_KEY: ${{ inputs.cursor_api_key || secrets.cursor_api_key || secrets.CURSOR_API_KEY }}
           PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
           REPOSITORY: ${{ inputs.repository || github.repository }}
+          VERBOSE: ${{ inputs.verbose != false }}
       
       - name: Upload analysis results
         uses: actions/upload-artifact@v4
@@ -112,7 +129,7 @@ jobs:
           retention-days: 30
       
       - name: Comment analysis results on PR
-        if: (inputs.pr_number || github.event.pull_request.number) && (inputs.post_comment == true || inputs.post_comment == null)
+        if: steps.analyze-step.outputs.has_issues == 'true' && (inputs.pr_number || github.event.pull_request.number) && (inputs.post_comment == true || inputs.post_comment == null)
         run: |
           python actions/analyze-pr-code/post_comment.py \
             --pr-number "${{ inputs.pr_number || github.event.pull_request.number }}" \
