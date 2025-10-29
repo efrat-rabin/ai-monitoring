@@ -92,7 +92,7 @@ def post_issue_comment(
     
     try:
         response = requests.post(url, headers=headers, json={"body": comment_body})
-        response.raise_for_status()   
+        response.raise_for_status()
         print(f"✅ Posted comment")
         return True
     except Exception as e:
