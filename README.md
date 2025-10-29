@@ -7,12 +7,10 @@ This repository contains GitHub Actions workflows for AI-powered code monitoring
 ```
 .
 ├── .github/
-│   ├── workflows/          # GitHub Actions workflow definitions
-│   │   ├── analyze-pr-code.yml
-│   │   ├── apply-suggested-logs.yml
-│   │   └── apply-suggested-gc-resources.yml
-│   └── prompts/            # AI prompts for code analysis
-│       └── analyze-logs.txt
+│   └── workflows/          # GitHub Actions workflow definitions
+│       ├── analyze-pr-code.yml
+│       ├── apply-suggested-logs.yml
+│       └── apply-suggested-gc-resources.yml
 ├── actions/                # Action implementation scripts
 │   ├── analyze-pr-code/
 │   │   ├── code_analyzer.py    # Full Cursor AI integration
@@ -20,7 +18,13 @@ This repository contains GitHub Actions workflows for AI-powered code monitoring
 │   ├── apply-suggested-logs/
 │   │   └── main.py
 │   └── apply-suggested-gc-resources/
-│       └── main.py
+│       ├── main.py
+│       ├── ai_analyzer.py
+│       ├── groundcover_client.py
+│       └── prompts.py
+├── libs/                   # Shared libraries
+│   ├── cursor_client.py   # Common Cursor CLI client
+│   └── README.md
 ├── requirements.txt        # Python dependencies
 └── README.md
 ```
@@ -62,18 +66,29 @@ Applies AI-suggested logging statements to the codebase.
 - `repository` - Repository in format `owner/repo` (optional)
 - `git_token` - GitHub token for API access (required)
 
-### 3. Apply Suggested GC Resources
+### 3. Create Groundcover Alerts from Log Lines
 
-**File:** `.github/workflows/apply-suggested-gc-resources.yml`
+**File:** `actions/apply-suggested-gc-resources/main.py`
 
-Applies suggested garbage collection resource optimizations.
+Analyzes individual log lines using AI and automatically creates appropriate alerts in groundcover.
 
-**Trigger:** `workflow_dispatch` (can be called from external workflows)
+**Features:**
+- Receives log lines as stringified JSON via command-line
+- Uses AI (Claude) to determine if an alert is warranted
+- Automatically creates alerts in groundcover via API
+- Supports dry-run mode for testing
 
-**Inputs:**
-- `pr_number` - Pull request number (optional)
-- `repository` - Repository in format `owner/repo` (optional)
-- `git_token` - GitHub token for API access (required)
+**Usage:**
+```bash
+python actions/apply-suggested-gc-resources/main.py \
+  --log-line '{"level":"error","message":"Database connection failed","service":"api"}'
+```
+
+**Required Environment Variables:**
+- `ANTHROPIC_API_KEY` - API key for Claude AI analysis
+- `GROUNDCOVER_API_KEY` - API key for groundcover
+
+See [detailed documentation](actions/apply-suggested-gc-resources/README.md) for more information.
 
 ## Usage
 
@@ -193,11 +208,17 @@ Return JSON format:
 
 ## Environment Variables
 
-The workflows provide the following environment variables to the Python scripts:
+The workflows and scripts use the following environment variables:
 
+### General
 - `GITHUB_TOKEN` - GitHub token for API access
 - `PR_NUMBER` - Pull request number (if provided)
 - `REPOSITORY` - Repository name in format `owner/repo` (if provided)
+
+### Groundcover Alert Creation
+- `ANTHROPIC_API_KEY` - API key for Claude AI analysis
+- `GROUNDCOVER_API_KEY` - API key for groundcover (get via `groundcover auth get-datasources-api-key`)
+- `GROUNDCOVER_API_URL` - (Optional) Base URL for groundcover API (defaults to `https://api.groundcover.com`)
 
 ## License
 
