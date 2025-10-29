@@ -171,10 +171,6 @@ class GitHubPRAnalyzer:
     
     def get_changed_files(self, file_patterns: Optional[List[str]] = None) -> List[str]:
         """Get list of changed files in the PR using GitHub API."""
-        if file_patterns is None:
-            file_patterns = ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx', 
-                           '**/*.py', '**/*.go']
-        
         print(f"Getting changed files for PR #{self.pr_number}...")
         
         try:
@@ -192,7 +188,7 @@ class GitHubPRAnalyzer:
             print(f"Found {len(pr_files)} total files in PR")
             
             # Extract filenames (only added or modified, not deleted)
-            all_files = []
+            changed_files = []
             for file_info in pr_files:
                 status = file_info.get('status', '')
                 filename = file_info.get('filename', '')
@@ -200,32 +196,19 @@ class GitHubPRAnalyzer:
                 # Include: added, modified, renamed, copied
                 # Exclude: removed, deleted
                 if status in ['added', 'modified', 'renamed', 'copied'] and filename:
-                    all_files.append(filename)
+                    # Check if file exists locally
+                    if not os.path.exists(filename):
+                        print(f"  - {filename} ({status}) - file not found locally, skipping")
+                        continue
+                    
+                    changed_files.append(filename)
                     print(f"  - {filename} ({status})")
             
-            print(f"Found {len(all_files)} added/modified files")
+            print(f"Found {len(changed_files)} files to analyze")
+            if changed_files:
+                print(f"Files to analyze: {', '.join(changed_files)}")
             
-            # Filter by file patterns and verify files exist
-            filtered_files = []
-            for file in all_files:
-                # Check if file exists (should exist if added/modified)
-                if not os.path.exists(file):
-                    print(f"Skipping {file} - file not found locally")
-                    continue
-                
-                file_path = Path(file)
-                for pattern in file_patterns:
-                    # Simple pattern matching
-                    pattern_ext = pattern.split('.')[-1]
-                    if file.endswith(f'.{pattern_ext}'):
-                        filtered_files.append(file)
-                        break
-            
-            print(f"Found {len(filtered_files)} changed files matching patterns")
-            if filtered_files:
-                print(f"Files to analyze: {', '.join(filtered_files)}")
-            
-            return filtered_files
+            return changed_files
             
         except requests.exceptions.RequestException as e:
             print(f"ERROR: Failed to get changed files from GitHub API: {e}")
