@@ -23,16 +23,30 @@ def get_pr_comments(github_token: str, repository: str, pr_number: int):
 
 
 def check_for_trigger(comments, analysis_comment_id=None):
-    """Check if any comment contains /apply-logs trigger."""
+    """Check if any comment contains /apply-logs trigger and extract the parent comment."""
     for comment in comments:
         body = comment.get('body', '').strip().lower()
         
         if '/apply-logs' in body:
-            # If checking for replies, ensure it's after the analysis comment
-            if analysis_comment_id and comment.get('id', 0) > analysis_comment_id:
-                return comment
-            elif not analysis_comment_id:
-                return comment
+            # Find the parent comment (the one being replied to)
+            # Look for the comment that contains the issue details
+            parent_id = comment.get('in_reply_to_id')
+            
+            if parent_id:
+                # Find the parent comment
+                for parent_comment in comments:
+                    if parent_comment.get('id') == parent_id:
+                        return {
+                            'trigger_comment': comment,
+                            'parent_comment': parent_comment
+                        }
+            
+            # If no parent, the comment itself might contain the issue
+            if '## 🤖 Logging Suggestion' in comment.get('body', ''):
+                return {
+                    'trigger_comment': comment,
+                    'parent_comment': comment
+                }
     
     return None
 
@@ -52,19 +66,34 @@ def main():
     
     comments = get_pr_comments(github_token, args.repository, int(args.pr_number))
     analysis_comment_id = int(args.analysis_comment_id) if args.analysis_comment_id else None
-    trigger_comment = check_for_trigger(comments, analysis_comment_id)
+    trigger_data = check_for_trigger(comments, analysis_comment_id)
     
-    result = {
-        "triggered": trigger_comment is not None,
-        "comment_id": trigger_comment.get('id') if trigger_comment else None,
-        "comment_author": trigger_comment.get('user', {}).get('login') if trigger_comment else None,
-    }
+    if trigger_data:
+        trigger_comment = trigger_data['trigger_comment']
+        parent_comment = trigger_data['parent_comment']
+        
+        result = {
+            "triggered": True,
+            "comment_id": trigger_comment.get('id'),
+            "comment_author": trigger_comment.get('user', {}).get('login'),
+            "parent_comment_id": parent_comment.get('id'),
+            "parent_comment_body": parent_comment.get('body', '')
+        }
+    else:
+        result = {
+            "triggered": False,
+            "comment_id": None,
+            "comment_author": None,
+            "parent_comment_id": None,
+            "parent_comment_body": None
+        }
     
     with open(args.output_file, 'w') as f:
         json.dump(result, f, indent=2)
     
     if result['triggered']:
         print(f"✓ Found /apply-logs trigger in comment #{result['comment_id']}")
+        print(f"  Parent comment: #{result['parent_comment_id']}")
     else:
         print("No /apply-logs trigger found")
     
