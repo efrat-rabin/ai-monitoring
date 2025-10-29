@@ -95,11 +95,48 @@ class LogApplier:
         return None
 
 
+def parse_issue_from_comment(comment_body: str) -> Optional[Dict[str, Any]]:
+    """Parse issue details from a comment body."""
+    import re
+    
+    # Extract file path
+    file_match = re.search(r'\*\*File:\*\* `([^`]+)`', comment_body)
+    if not file_match:
+        return None
+    
+    file_path = file_match.group(1)
+    
+    # Extract other fields
+    method_match = re.search(r'\*\*Method:\*\* `([^`]+)`', comment_body)
+    line_match = re.search(r'\*\*Line:\*\* (\d+)', comment_body)
+    severity_match = re.search(r'## 🤖 Logging Suggestion: (\w+)', comment_body)
+    category_match = re.search(r'\*\*Category:\*\* ([^\n]+)', comment_body)
+    
+    # Extract description, recommendation, impact
+    desc_match = re.search(r'### Description\n([^#]+)', comment_body, re.DOTALL)
+    rec_match = re.search(r'### Recommendation\n```[^\n]*\n(.*?)\n```', comment_body, re.DOTALL)
+    impact_match = re.search(r'### Impact\n([^#]+)', comment_body, re.DOTALL)
+    
+    issue = {
+        'file': file_path,
+        'severity': severity_match.group(1) if severity_match else 'MEDIUM',
+        'category': category_match.group(1) if category_match else 'logging',
+        'method': method_match.group(1) if method_match else 'N/A',
+        'line': int(line_match.group(1)) if line_match else 0,
+        'description': desc_match.group(1).strip() if desc_match else '',
+        'recommendation': rec_match.group(1).strip() if rec_match else '',
+        'impact': impact_match.group(1).strip() if impact_match else ''
+    }
+    
+    return issue
+
+
 def main():
     parser = argparse.ArgumentParser(description='Apply suggested logs')
     parser.add_argument('--pr-number', type=str, required=True)
     parser.add_argument('--repository', type=str, required=True)
-    parser.add_argument('--analysis-results', type=str, required=True)
+    parser.add_argument('--analysis-results', type=str)
+    parser.add_argument('--comment-body', type=str, help='Comment body with issue to apply')
     parser.add_argument('--comment-id', type=str)
     parser.add_argument('--prompt-file', type=str, 
                        default='.github/prompts/apply-logs.txt')
@@ -111,25 +148,48 @@ def main():
         print("ERROR: CURSOR_API_KEY not set")
         return 1
     
-    # Parse analysis results
-    analysis_results = json.loads(args.analysis_results)
-    
     # Initialize applier
     applier = LogApplier(cursor_api_key, args.prompt_file)
     
-    # Apply improvements
-    files_modified = 0
-    for file_result in analysis_results:
-        file_path = file_result.get('file')
-        analysis = file_result.get('analysis', {})
-        issues = analysis.get('issues', [])
+    # Parse issue from comment body if provided
+    if args.comment_body:
+        print("Parsing issue from comment...")
+        issue = parse_issue_from_comment(args.comment_body)
         
-        if file_path and issues and 'error' not in analysis:
-            if applier.apply_logging_improvements(file_path, issues):
-                files_modified += 1
+        if not issue:
+            print("ERROR: Could not parse issue from comment")
+            return 1
+        
+        file_path = issue.pop('file')
+        print(f"Applying single issue to {file_path}")
+        
+        if applier.apply_logging_improvements(file_path, [issue]):
+            print(f"\n✓ Applied change to {file_path}")
+            return 0
+        else:
+            print(f"\n✗ Failed to apply change")
+            return 1
     
-    print(f"\nModified {files_modified} file(s)")
-    return 0
+    # Fallback: apply all from analysis results
+    elif args.analysis_results:
+        analysis_results = json.loads(args.analysis_results)
+        
+        files_modified = 0
+        for file_result in analysis_results:
+            file_path = file_result.get('file')
+            analysis = file_result.get('analysis', {})
+            issues = analysis.get('issues', [])
+            
+            if file_path and issues and 'error' not in analysis:
+                if applier.apply_logging_improvements(file_path, issues):
+                    files_modified += 1
+        
+        print(f"\nModified {files_modified} file(s)")
+        return 0
+    
+    else:
+        print("ERROR: Either --comment-body or --analysis-results required")
+        return 1
 
 
 if __name__ == '__main__':
