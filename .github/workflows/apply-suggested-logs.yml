@@ -5,16 +5,53 @@ on:
     inputs:
       pr_number:
         description: 'Pull Request Number'
-        required: false
+        required: true
         type: string
       repository:
         description: 'Repository (owner/repo)'
+        required: true
+        type: string
+      comment_body:
+        description: 'Review comment body with issue to apply'
+        required: true
+        type: string
+      comment_id:
+        description: 'Comment ID that triggered the apply'
         required: false
         type: string
       git_token:
         description: 'GitHub Token'
         required: true
         type: string
+      cursor_api_key:
+        description: 'Cursor API Key'
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      pr_number:
+        description: 'Pull Request Number'
+        required: true
+        type: string
+      repository:
+        description: 'Repository (owner/repo)'
+        required: true
+        type: string
+      comment_body:
+        description: 'Review comment body with issue to apply'
+        required: true
+        type: string
+      comment_id:
+        description: 'Comment ID that triggered the apply'
+        required: false
+        type: string
+    secrets:
+      git_token:
+        description: 'GitHub Token'
+        required: false
+      cursor_api_key:
+        description: 'Cursor API Key'
+        required: true
 
 jobs:
   apply-logs:
@@ -23,6 +60,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ inputs.pr_number }}/head
+          fetch-depth: 0
+          token: ${{ inputs.git_token || secrets.git_token }}
+      
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
       
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -35,9 +81,42 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
       
       - name: Run apply suggested logs script
-        run: python actions/apply-suggested-logs/main.py
+        id: apply-logs
+        run: |
+          python actions/apply-suggested-logs/main.py \
+            --pr-number "${{ inputs.pr_number }}" \
+            --repository "${{ inputs.repository }}" \
+            --comment-body '${{ inputs.comment_body }}' \
+            --comment-id "${{ inputs.comment_id }}"
         env:
-          GITHUB_TOKEN: ${{ inputs.git_token }}
-          PR_NUMBER: ${{ inputs.pr_number }}
-          REPOSITORY: ${{ inputs.repository }}
+          GITHUB_TOKEN: ${{ inputs.git_token || secrets.git_token }}
+          CURSOR_API_KEY: ${{ inputs.cursor_api_key || secrets.cursor_api_key }}
+      
+      - name: Commit and push changes
+        id: commit-changes
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            git add .
+            git commit -m "🤖 Apply AI-suggested logging improvements
+            
+            Applied structured logging improvements suggested by AI analysis.
+            
+            Co-authored-by: github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+            git push
+            echo "changes_applied=true" >> $GITHUB_OUTPUT
+            echo "✅ Changes committed and pushed"
+          else
+            echo "changes_applied=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ No changes to commit"
+          fi
+      
+      - name: Comment on PR
+        if: steps.commit-changes.outputs.changes_applied == 'true'
+        run: |
+          python actions/apply-suggested-logs/post_apply_comment.py \
+            --pr-number "${{ inputs.pr_number }}" \
+            --repository "${{ inputs.repository }}" \
+            --comment-id "${{ inputs.comment_id }}"
+        env:
+          GITHUB_TOKEN: ${{ inputs.git_token || secrets.git_token }}
 

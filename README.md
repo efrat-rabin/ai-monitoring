@@ -7,19 +7,24 @@ This repository contains GitHub Actions workflows for AI-powered code monitoring
 ```
 .
 ├── .github/
-│   ├── workflows/          # GitHub Actions workflow definitions
-│   │   ├── analyze-pr-code.yml
-│   │   ├── apply-suggested-logs.yml
-│   │   └── apply-suggested-gc-resources.yml
-│   └── prompts/            # AI prompts for code analysis
-│       └── analyze-logs.txt
+│   └── workflows/          # GitHub Actions workflow definitions
+│       ├── analyze-pr-code.yml
+│       ├── apply-suggested-logs.yml
+│       └── apply-suggested-gc-resources.yml
 ├── actions/                # Action implementation scripts
 │   ├── analyze-pr-code/
-│   │   └── main.py        # Full Cursor AI integration
+│   │   ├── code_analyzer.py    # Full Cursor AI integration
+│   │   └── post_comment.py     # Post PR comments
 │   ├── apply-suggested-logs/
 │   │   └── main.py
 │   └── apply-suggested-gc-resources/
-│       └── main.py
+│       ├── main.py
+│       ├── ai_analyzer.py
+│       ├── groundcover_client.py
+│       └── prompts.py
+├── libs/                   # Shared libraries
+│   ├── cursor_client.py   # Common Cursor CLI client
+│   └── README.md
 ├── requirements.txt        # Python dependencies
 └── README.md
 ```
@@ -42,9 +47,11 @@ Analyzes pull request code using Cursor AI to provide insights and recommendatio
 **Inputs:**
 - `pr_number` - Pull request number (optional)
 - `repository` - Repository in format `owner/repo` (optional)
-- `git_token` - GitHub token for API access (required)
-- `cursor_api_key` - Cursor API key for AI analysis (required)
-- `prompt_file` - Path to prompt file (default: `.github/prompts/analyze-logs.txt`)
+- `cursor_api_key` - Cursor API key for AI analysis (optional, uses `CURSOR_API_KEY` secret by default)
+
+**Required Secrets:**
+- `BOT_GITHUB_TOKEN` - GitHub token with repo access (used automatically)
+- `CURSOR_API_KEY` - Cursor API key for AI analysis
 
 ### 2. Apply Suggested Logs
 
@@ -59,18 +66,29 @@ Applies AI-suggested logging statements to the codebase.
 - `repository` - Repository in format `owner/repo` (optional)
 - `git_token` - GitHub token for API access (required)
 
-### 3. Apply Suggested GC Resources
+### 3. Create Groundcover Alerts from Log Lines
 
-**File:** `.github/workflows/apply-suggested-gc-resources.yml`
+**File:** `actions/apply-suggested-gc-resources/main.py`
 
-Applies suggested garbage collection resource optimizations.
+Analyzes individual log lines using AI and automatically creates appropriate alerts in groundcover.
 
-**Trigger:** `workflow_dispatch` (can be called from external workflows)
+**Features:**
+- Receives log lines as stringified JSON via command-line
+- Uses AI (Claude) to determine if an alert is warranted
+- Automatically creates alerts in groundcover via API
+- Supports dry-run mode for testing
 
-**Inputs:**
-- `pr_number` - Pull request number (optional)
-- `repository` - Repository in format `owner/repo` (optional)
-- `git_token` - GitHub token for API access (required)
+**Usage:**
+```bash
+python actions/apply-suggested-gc-resources/main.py \
+  --log-line '{"level":"error","message":"Database connection failed","service":"api"}'
+```
+
+**Required Environment Variables:**
+- `ANTHROPIC_API_KEY` - API key for Claude AI analysis
+- `GROUNDCOVER_API_KEY` - API key for groundcover
+
+See [detailed documentation](actions/apply-suggested-gc-resources/README.md) for more information.
 
 ## Usage
 
@@ -97,9 +115,10 @@ Or using the GitHub CLI:
 gh workflow run analyze-pr-code.yml \
   --repo your-org/ai-monitoring \
   -f pr_number=123 \
-  -f repository=your-org/your-repo \
-  -f git_token=$GITHUB_TOKEN
+  -f repository=your-org/your-repo
 ```
+
+**Note:** The workflow uses the `BOT_GITHUB_TOKEN` secret automatically. Make sure it's configured in your repository secrets.
 
 ## Development
 
@@ -117,7 +136,7 @@ gh workflow run analyze-pr-code.yml \
 
 2. Run a script locally:
    ```bash
-   python actions/analyze-pr-code/main.py --pr-number 123 --repository owner/repo
+   python actions/analyze-pr-code/code_analyzer.py --pr-number 123 --repository owner/repo
    ```
 
 ### Adding Dependencies
@@ -150,7 +169,7 @@ export CURSOR_API_KEY="your-cursor-api-key"
 
 # Run the script
 cd your-repo-with-changes
-python /path/to/actions/analyze-pr-code/main.py \
+python /path/to/actions/analyze-pr-code/code_analyzer.py \
   --pr-number 123 \
   --repository owner/repo \
   --prompt-file .github/prompts/analyze-logs.txt
@@ -161,7 +180,7 @@ python /path/to/actions/analyze-pr-code/main.py \
 The `apply-suggested-logs` and `apply-suggested-gc-resources` actions contain placeholder implementations. To implement:
 
 1. Navigate to the appropriate `main.py` file in `actions/<action-name>/`
-2. Add your implementation following the pattern in `analyze-pr-code/main.py`
+2. Add your implementation following the pattern in `analyze-pr-code/code_analyzer.py`
 3. Add any required dependencies to `requirements.txt`
 4. Test locally before committing
 
@@ -189,11 +208,17 @@ Return JSON format:
 
 ## Environment Variables
 
-The workflows provide the following environment variables to the Python scripts:
+The workflows and scripts use the following environment variables:
 
+### General
 - `GITHUB_TOKEN` - GitHub token for API access
 - `PR_NUMBER` - Pull request number (if provided)
 - `REPOSITORY` - Repository name in format `owner/repo` (if provided)
+
+### Groundcover Alert Creation
+- `ANTHROPIC_API_KEY` - API key for Claude AI analysis
+- `GROUNDCOVER_API_KEY` - API key for groundcover (get via `groundcover auth get-datasources-api-key`)
+- `GROUNDCOVER_API_URL` - (Optional) Base URL for groundcover API (defaults to `https://api.groundcover.com`)
 
 ## License
 
