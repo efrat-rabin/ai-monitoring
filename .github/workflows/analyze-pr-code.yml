@@ -62,18 +62,23 @@ jobs:
       results-file: analysis-results.json
     
     steps:
+      - name: Get PR branch ref (manual trigger)
+        if: github.event_name == 'workflow_dispatch' && inputs.pr_number
+        id: pr-ref
+        run: |
+          # Get PR head ref using GitHub API
+          PR_DATA=$(gh pr view ${{ inputs.pr_number }} --json headRefName,headRepository --repo ${{ inputs.repository || github.repository }})
+          HEAD_REF=$(echo "$PR_DATA" | jq -r '.headRefName')
+          echo "ref=$HEAD_REF" >> $GITHUB_OUTPUT
+          echo "Checking out PR branch: $HEAD_REF"
+        env:
+          GH_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN || github.token }}
+      
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+          ref: ${{ steps.pr-ref.outputs.ref || github.event.pull_request.head.sha || github.ref }}
           fetch-depth: 0
-      
-      - name: Checkout PR branch (manual trigger only)
-        if: github.event_name == 'workflow_dispatch' && inputs.pr_number
-        run: |
-          gh pr checkout ${{ inputs.pr_number }}
-        env:
-          GH_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN || github.token }}
       
       - name: Set up Python
         uses: actions/setup-python@v5
