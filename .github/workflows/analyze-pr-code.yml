@@ -15,6 +15,11 @@ on:
         description: 'Cursor API Key'
         required: false
         type: string
+      post_comment:
+        description: 'Post comment on PR with results'
+        required: false
+        default: true
+        type: boolean
   workflow_call:
     inputs:
       pr_number:
@@ -25,6 +30,11 @@ on:
         description: 'Repository (owner/repo)'
         required: false
         type: string
+      post_comment:
+        description: 'Post comment on PR with results'
+        required: false
+        default: true
+        type: boolean
     secrets:
       cursor_api_key:
         description: 'Cursor API Key'
@@ -33,6 +43,9 @@ on:
 jobs:
   analyze:
     runs-on: ubuntu-latest
+    outputs:
+      results-json: ${{ steps.analyze-step.outputs.results }}
+      results-file: analysis-results.json
     
     steps:
       - name: Checkout repository
@@ -58,7 +71,16 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
       
       - name: Run analyze PR code script
-        run: python actions/analyze-pr-code/main.py
+        id: analyze-step
+        run: |
+          python actions/analyze-pr-code/code_analyzer.py
+          
+          # Export results as output
+          if [ -f analysis-results.json ]; then
+            echo "results<<EOF" >> $GITHUB_OUTPUT
+            cat analysis-results.json >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
           CURSOR_API_KEY: ${{ inputs.cursor_api_key || secrets.cursor_api_key || secrets.CURSOR_API_KEY }}
@@ -74,77 +96,12 @@ jobs:
           retention-days: 30
       
       - name: Comment analysis results on PR
-        if: inputs.pr_number
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.BOT_GITHUB_TOKEN }}
-          script: |
-            const fs = require('fs');
-            
-            // Read analysis results
-            let results;
-            try {
-              results = JSON.parse(fs.readFileSync('analysis-results.json', 'utf8'));
-            } catch (error) {
-              console.log('No analysis results found');
-              return;
-            }
-            
-            // Format results as markdown comment
-            let comment = '## 🤖 AI Code Analysis Results\n\n';
-            
-            if (results.length === 0) {
-              comment += 'No files were analyzed in this PR.\n';
-            } else {
-              for (const result of results) {
-                comment += `### 📄 File: \`${result.file}\`\n\n`;
-                
-                if (result.analysis.error) {
-                  comment += `❌ **Error:** ${result.analysis.error}\n\n`;
-                } else if (result.analysis.issues && result.analysis.issues.length > 0) {
-                  comment += `**Found ${result.analysis.issues.length} issue(s):**\n\n`;
-                  
-                  for (const issue of result.analysis.issues) {
-                    comment += '<details>\n';
-                    comment += `<summary><strong>${issue.severity || 'MEDIUM'}</strong> - ${issue.category || 'general'}: ${issue.method || 'N/A'}</summary>\n\n`;
-                    comment += `**File:** \`${result.file}\`\n\n`;
-                    
-                    if (issue.line) {
-                      comment += `**Line:** ${issue.line}\n\n`;
-                      comment += `**Location:** [\`${result.file}:${issue.line}\`](../blob/${context.sha}/${result.file}#L${issue.line})\n\n`;
-                    }
-                    
-                    if (issue.description) {
-                      comment += `**Description:** ${issue.description}\n\n`;
-                    }
-                    
-                    if (issue.recommendation) {
-                      comment += `**Recommendation:**\n\`\`\`typescript\n${issue.recommendation}\n\`\`\`\n\n`;
-                    }
-                    
-                    if (issue.impact) {
-                      comment += `**Impact:** ${issue.impact}\n\n`;
-                    }
-                    
-                    comment += '</details>\n\n';
-                  }
-                }
-                
-                if (result.analysis.summary) {
-                  comment += `**Summary:** ${result.analysis.summary}\n\n`;
-                }
-                
-                comment += '---\n\n';
-              }
-            }
-            
-            comment += '*Analysis powered by Cursor AI*\n';
-            
-            // Post comment on PR
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: ${{ inputs.pr_number }},
-              body: comment
-            });
+        if: inputs.pr_number && (inputs.post_comment == true || inputs.post_comment == null)
+        run: |
+          python actions/analyze-pr-code/post_comment.py \
+            --pr-number "${{ inputs.pr_number }}" \
+            --repository "${{ inputs.repository }}" \
+            --results-file analysis-results.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
 

@@ -15,7 +15,8 @@ This repository contains GitHub Actions workflows for AI-powered code monitoring
 │       └── analyze-logs.txt
 ├── actions/                # Action implementation scripts
 │   ├── analyze-pr-code/
-│   │   └── main.py        # Full Cursor AI integration
+│   │   ├── code_analyzer.py    # Full Cursor AI integration
+│   │   └── post_comment.py     # Post PR comments
 │   ├── apply-suggested-logs/
 │   │   └── main.py
 │   └── apply-suggested-gc-resources/
@@ -120,7 +121,7 @@ gh workflow run analyze-pr-code.yml \
 
 2. Run a script locally:
    ```bash
-   python actions/analyze-pr-code/main.py --pr-number 123 --repository owner/repo
+   python actions/analyze-pr-code/code_analyzer.py --pr-number 123 --repository owner/repo
    ```
 
 ### Adding Dependencies
@@ -153,7 +154,7 @@ export CURSOR_API_KEY="your-cursor-api-key"
 
 # Run the script
 cd your-repo-with-changes
-python /path/to/actions/analyze-pr-code/main.py \
+python /path/to/actions/analyze-pr-code/code_analyzer.py \
   --pr-number 123 \
   --repository owner/repo \
   --prompt-file .github/prompts/analyze-logs.txt
@@ -164,7 +165,7 @@ python /path/to/actions/analyze-pr-code/main.py \
 The `apply-suggested-logs` and `apply-suggested-gc-resources` actions contain placeholder implementations. To implement:
 
 1. Navigate to the appropriate `main.py` file in `actions/<action-name>/`
-2. Add your implementation following the pattern in `analyze-pr-code/main.py`
+2. Add your implementation following the pattern in `analyze-pr-code/code_analyzer.py`
 3. Add any required dependencies to `requirements.txt`
 4. Test locally before committing
 
