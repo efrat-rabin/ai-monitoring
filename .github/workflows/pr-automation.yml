@@ -1,0 +1,119 @@
+name: PR Automation
+
+# Automatically analyze PRs and apply logging improvements
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  # Job 1: Run analysis when PR is opened/updated
+  analyze:
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    uses: ./.github/workflows/analyze-pr-code.yml
+    with:
+      pr_number: ${{ github.event.pull_request.number }}
+      repository: ${{ github.repository }}
+      post_comment: true
+      test_mode: true
+    secrets:
+      cursor_api_key: ${{ secrets.CURSOR_API_KEY }}
+  
+  # Job 2: Apply logging improvements when /apply-logs is commented
+  apply-logs:
+    if: |
+      github.event_name == 'pull_request_review_comment' &&
+      contains(github.event.comment.body, '/apply-logs')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
+          fetch-depth: 0
+          token: ${{ secrets.BOT_GITHUB_TOKEN || github.token }}
+      
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      
+      - name: Get parent review comment
+        id: get-parent
+        run: |
+          python actions/apply-suggested-logs/check_apply_trigger.py \
+            --pr-number "${{ github.event.pull_request.number }}" \
+            --repository "${{ github.repository }}" \
+            --output-file trigger-info.json
+          
+          if [ -f trigger-info.json ]; then
+            PARENT_BODY=$(cat trigger-info.json | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('parent_comment_body', ''))")
+            echo "parent_body<<EOF" >> $GITHUB_OUTPUT
+            echo "$PARENT_BODY" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      
+      - name: Apply logging improvements
+        run: |
+          python actions/apply-suggested-logs/main.py \
+            --pr-number "${{ github.event.pull_request.number }}" \
+            --repository "${{ github.repository }}" \
+            --comment-body "${{ steps.get-parent.outputs.parent_body }}" \
+            --comment-id "${{ github.event.comment.id }}"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+      
+      - name: Commit and push changes
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            git add .
+            git commit -m "🤖 Apply AI-suggested logging improvements
+            
+            Applied in response to review comment.
+            
+            Co-authored-by: github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+            git push
+            echo "✅ Changes committed and pushed"
+          else
+            echo "ℹ️ No changes to commit"
+          fi
+      
+      - name: Post success comment
+        if: success()
+        run: |
+          python actions/apply-suggested-logs/post_apply_comment.py \
+            --pr-number "${{ github.event.pull_request.number }}" \
+            --repository "${{ github.repository }}" \
+            --comment-id "${{ github.event.comment.id }}"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+

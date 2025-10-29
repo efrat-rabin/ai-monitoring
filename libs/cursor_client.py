@@ -10,7 +10,7 @@ import json
 import re
 from pathlib import Path
 from typing import Optional, Any
- 
+     
 class CursorClient:
     """Client for sending messages to Cursor CLI."""
     

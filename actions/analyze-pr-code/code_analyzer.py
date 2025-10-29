@@ -109,22 +109,49 @@ class CursorAnalyzer:
                 "analysis": {
                     "issues": [
                         {
+                            "severity": "CRITICAL",
+                            "category": "missing-logs",
+                            "line": 95,
+                            "method": "send_message",
+                            "description": "The core method that performs external API calls to cursor-agent lacks any logging. No entry logs with request details, no success logs, no timing metrics, and errors are raised without being logged first. This makes it impossible to troubleshoot API call failures, track request volume, or monitor performance.",
+                            "recommendation": "Add structured logging: log entry with prompt length/truncated prompt, log success with response metadata, log duration/timing, and log errors before raising. Example: logger.info('sending_cursor_message', extra={'prompt_length': len(prompt), 'has_context': bool(context), 'correlation_id': correlation_id}); start_time = time.time(); ...; logger.info('cursor_message_success', extra={'duration_ms': (time.time() - start_time) * 1000, 'response_size': len(str(result))}); logger.error('cursor_message_failed', extra={'error': str(e), 'stderr': result.stderr}, exc_info=True)",
+                            "impact": "Without logs in send_message, production issues with Cursor API calls cannot be diagnosed. Cannot determine request rates, latency patterns, failure modes, or correlate errors with specific requests. Violates observability best practices for external API integrations."
+                        },
+                        {
+                            "severity": "CRITICAL",
+                            "category": "error-context",
+                            "line": 75,
+                            "method": "install_cursor_cli",
+                            "description": "Generic exception handler catches all exceptions and returns False without logging. Installation failures are completely silent, making it impossible to debug why installation attempts fail in production.",
+                            "recommendation": "Log exceptions with full context before returning False. Example: except Exception as e: logger.error('cursor_cli_install_failed', extra={'error': str(e), 'error_type': type(e).__name__}, exc_info=True); return False",
+                            "impact": "Installation failures in production environments cannot be diagnosed. Security issues, permission problems, network failures, or binary corruption go undetected. No audit trail for installation attempts."
+                        },
+                        {
                             "severity": "HIGH",
-                            "category": "structured-logging",
-                            "line": 10,
-                            "method": "example_function",
-                            "description": "[MOCK] Uses print() instead of structured logging",
-                            "recommendation": "Replace print() with logger.info() for structured logging",
-                            "impact": "Logs cannot be parsed or filtered in production"
+                            "category": "performance-metrics",
+                            "line": 119,
+                            "method": "send_message",
+                            "description": "External API call to cursor-agent subprocess lacks performance timing. No duration metrics collected, no SLA/SLO monitoring possible, cannot identify slow requests or timeout patterns.",
+                            "recommendation": "Add timing instrumentation around subprocess call. Example: import time; start_time = time.time(); result = subprocess.run(...); duration_ms = (time.time() - start_time) * 1000; logger.info('cursor_agent_call_completed', extra={'duration_ms': duration_ms, 'returncode': result.returncode}); also log warning if duration exceeds threshold (e.g., >5s)",
+                            "impact": "Cannot monitor API latency, detect performance degradation, or alert on slow requests. Cannot establish SLAs or track performance over time. Debugging slow requests is impossible without timing data."
+                        },
+                        {
+                            "severity": "HIGH",
+                            "category": "error-context",
+                            "line": 132,
+                            "method": "send_message",
+                            "description": "Exception handlers raise errors without logging them first. Timeout, FileNotFoundError, and generic exceptions are raised but not logged, making error tracking and alerting impossible. Errors lack context like prompt length, correlation IDs, and request metadata.",
+                            "recommendation": "Log all exceptions with full context before raising. Example: except subprocess.TimeoutExpired as e: logger.error('cursor_agent_timeout', extra={'timeout_seconds': 300, 'prompt_length': len(prompt)}, exc_info=True); raise; except FileNotFoundError as e: logger.error('cursor_agent_not_found', extra={'search_paths': search_paths}, exc_info=True); raise; except Exception as e: logger.error('cursor_agent_error', extra={'error': str(e), 'error_type': type(e).__name__, 'prompt_length': len(prompt)}, exc_info=True); raise",
+                            "impact": "Errors cannot be tracked, monitored, or alerted on. Error rates are unknown. Cannot correlate errors with specific requests or identify patterns. Troubleshooting production incidents requires code changes instead of log analysis."
                         },
                         {
                             "severity": "MEDIUM",
                             "category": "error-context",
-                            "line": 25,
-                            "method": "error_handler",
-                            "description": "[MOCK] Missing error context in exception handler",
-                            "recommendation": "Add logger.error() with exc_info=True",
-                            "impact": "Difficult to debug production errors"
+                            "line": 164,
+                            "method": "_parse_output",
+                            "description": "Silent exception catch at line 164 when JSON parsing fails - exception is caught but not logged. Additionally, JSONDecodeError at line 171 is caught but not logged, making it impossible to debug parsing failures or track malformed response patterns.",
+                            "recommendation": "Log parsing failures with context. Example: except json.JSONDecodeError as e: logger.warning('cursor_response_parse_failed', extra={'raw_output_preview': raw_output[:200], 'error': str(e)}, exc_info=True); return raw_output. Also log at line 164: except Exception as e: logger.warning('json_extraction_failed', extra={'error': str(e), 'result_field': str(result_field)[:200]}, exc_info=True); pass",
+                            "impact": "Parsing failures go undetected, making it impossible to identify when Cursor API response format changes or becomes malformed. Cannot track parse error rates or alert on parsing issues."
                         }
                     ],
                     "summary": "[MOCK] File has 2 logging issues that should be addressed"
@@ -150,10 +177,9 @@ class GitHubPRAnalyzer:
         print(f"Getting changed files for PR #{self.pr_number}...")
         
         try:
-            # Use git diff to get changed files
-            # Assumes we're in a checked-out repository
+            # Use git diff to get changed files (only files in the diff)
             result = subprocess.run(
-                ['git', 'diff', '--name-only', 'main...HEAD'],
+                ['git', 'diff', '--name-only', '--diff-filter=ACMR', 'origin/main...HEAD'],
                 capture_output=True,
                 text=True,
                 check=True
@@ -161,19 +187,25 @@ class GitHubPRAnalyzer:
             
             all_files = [f.strip() for f in result.stdout.split('\n') if f.strip()]
             
-            # Filter by file patterns
+            # Filter by file patterns and verify files exist
             filtered_files = []
             for file in all_files:
+                # Check if file exists (not deleted)
+                if not os.path.exists(file):
+                    print(f"Skipping {file} - file deleted")
+                    continue
+                
                 file_path = Path(file)
                 for pattern in file_patterns:
-                    # Simple pattern matching (could be enhanced with glob)
+                    # Simple pattern matching
                     pattern_ext = pattern.split('.')[-1]
                     if file.endswith(f'.{pattern_ext}'):
                         filtered_files.append(file)
                         break
             
-            print(f"Found {len(filtered_files)} changed files")
-            print(f"Files: {', '.join(filtered_files)}")
+            print(f"Found {len(filtered_files)} changed files in PR diff")
+            if filtered_files:
+                print(f"Files: {', '.join(filtered_files)}")
             
             return filtered_files
             
