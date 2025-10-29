@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Post PR Comment Script
-Posts analysis results as a comment on a GitHub Pull Request.
+Post PR Review Comments Script
+Posts review comments on specific code lines.
 """
 
 import os
@@ -12,126 +12,128 @@ import requests
 from typing import Dict, List, Any
 
 
-def format_comment(results: List[Dict[str, Any]], commit_sha: str = "") -> str:
-    """Format analysis results as a markdown comment."""
-    comment = "## 🤖 AI Code Analysis Results\n\n"
+def format_review_comment(issue: Dict[str, Any]) -> str:
+    """Format a single issue as a review comment."""
+    severity = issue.get("severity", "MEDIUM")
+    category = issue.get("category", "general")
+    method = issue.get("method", "N/A")
     
-    if len(results) == 0:
-        comment += "No files were analyzed in this PR.\n"
-    else:
-        for result in results:
-            file_path = result.get("file", "unknown")
-            analysis = result.get("analysis", {})
-            
-            comment += f"### 📄 File: `{file_path}`\n\n"
-            
-            if "error" in analysis:
-                comment += f"❌ **Error:** {analysis['error']}\n\n"
-            elif "issues" in analysis and len(analysis["issues"]) > 0:
-                issues = analysis["issues"]
-                comment += f"**Found {len(issues)} issue(s):**\n\n"
-                
-                for issue in issues:
-                    severity = issue.get("severity", "MEDIUM")
-                    category = issue.get("category", "general")
-                    method = issue.get("method", "N/A")
-                    
-                    comment += "<details>\n"
-                    comment += f"<summary><strong>{severity}</strong> - {category}: {method}</summary>\n\n"
-                    comment += f"**File:** `{file_path}`\n\n"
-                    
-                    if "line" in issue:
-                        line = issue["line"]
-                        comment += f"**Line:** {line}\n\n"
-                        if commit_sha:
-                            comment += f"**Location:** [`{file_path}:{line}`](../blob/{commit_sha}/{file_path}#L{line})\n\n"
-                    
-                    if "description" in issue:
-                        comment += f"**Description:** {issue['description']}\n\n"
-                    
-                    if "recommendation" in issue:
-                        comment += f"**Recommendation:**\n```typescript\n{issue['recommendation']}\n```\n\n"
-                    
-                    if "impact" in issue:
-                        comment += f"**Impact:** {issue['impact']}\n\n"
-                    
-                    comment += "</details>\n\n"
-            
-            if "summary" in analysis:
-                comment += f"**Summary:** {analysis['summary']}\n\n"
-            
-            comment += "---\n\n"
+    comment = f"**🤖 {severity}** - {category}\n\n"
     
-    comment += "### 🤖 Auto-Apply Available\n\n"
-    comment += "Want to automatically apply these logging improvements? Reply to this comment with:\n\n"
-    comment += "```\n/apply-logs\n```\n\n"
-    comment += "The AI will automatically apply all suggested improvements and commit them to this PR.\n\n"
-    comment += "---\n\n"
-    comment += "*Analysis powered by Cursor AI*\n"
+    if "description" in issue:
+        comment += f"{issue['description']}\n\n"
+    
+    if "recommendation" in issue:
+        comment += f"**Recommendation:**\n```python\n{issue['recommendation']}\n```\n\n"
+    
+    if "impact" in issue:
+        comment += f"**Impact:** {issue['impact']}\n\n"
+    
+    comment += "---\n"
+    comment += "Reply with `/apply-logs` to apply this change automatically."
+    
     return comment
 
 
-def post_comment(
+def format_summary_comment(results: List[Dict[str, Any]]) -> str:
+    """Format a summary comment with all issues found."""
+    total_issues = sum(len(r.get("analysis", {}).get("issues", [])) for r in results)
+    
+    comment = "## 🤖 AI Code Analysis Complete\n\n"
+    comment += f"Found **{total_issues} logging improvement(s)** across **{len(results)} file(s)**.\n\n"
+    
+    if total_issues > 0:
+        comment += "Each issue has been posted as a separate comment below. "
+        comment += "Review each suggestion and reply with `/apply-logs` to apply it.\n\n"
+        
+        comment += "### Summary by File\n\n"
+        for result in results:
+            file_path = result.get("file", "unknown")
+            analysis = result.get("analysis", {})
+            issues = analysis.get("issues", [])
+            
+            if issues:
+                comment += f"- `{file_path}`: {len(issues)} issue(s)\n"
+    else:
+        comment += "✅ No logging issues found. Great job!\n\n"
+    
+    comment += "\n*Analysis powered by Cursor AI*\n"
+    return comment
+
+
+def post_issue_comment(
     github_token: str,
     repository: str,
     pr_number: int,
     comment_body: str
 ) -> bool:
-    """Post a comment on a GitHub PR."""
-    
-    # Parse repository (owner/repo)
-    try:
-        owner, repo = repository.split("/")
-    except ValueError:
-        print(f"ERROR: Invalid repository format: {repository}")
-        print("Expected format: owner/repo")
-        return False
-    
-    # GitHub API endpoint
+    """Post a general comment on a GitHub PR."""
+    owner, repo = repository.split("/")
     url = f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_number}/comments"
     
     headers = {
         "Authorization": f"Bearer {github_token}",
         "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28"
+    }
+    
+    try:
+        response = requests.post(url, headers=headers, json={"body": comment_body})
+        response.raise_for_status()
+        print(f"✅ Posted comment")
+        return True
+    except Exception as e:
+        print(f"❌ Failed: {e}")
+        return False
+
+
+def post_review_comment(
+    github_token: str,
+    repository: str,
+    pr_number: int,
+    commit_sha: str,
+    file_path: str,
+    line: int,
+    comment_body: str
+) -> bool:
+    """Post a review comment on a specific line."""
+    owner, repo = repository.split("/")
+    url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/comments"
+    
+    headers = {
+        "Authorization": f"Bearer {github_token}",
+        "Accept": "application/vnd.github+json",
     }
     
     payload = {
-        "body": comment_body
+        "body": comment_body,
+        "commit_id": commit_sha,
+        "path": file_path,
+        "line": line,
+        "side": "RIGHT"
     }
-    
-    print(f"Posting comment to PR #{pr_number} in {repository}")
     
     try:
         response = requests.post(url, headers=headers, json=payload)
         response.raise_for_status()
-        
-        print(f"✅ Successfully posted comment")
         return True
-        
-    except requests.exceptions.HTTPError as e:
-        print(f"❌ Failed to post comment: HTTP {response.status_code}")
-        print(f"Response: {response.text}")
-        return False
     except Exception as e:
-        print(f"❌ Failed to post comment: {e}")
+        print(f"❌ Failed to post review comment on {file_path}:{line} - {e}")
         return False
 
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(description="Post analysis results as PR comment")
-    parser.add_argument("--pr-number", type=str, required=True, help="Pull request number")
-    parser.add_argument("--repository", type=str, required=True, help="Repository (owner/repo)")
-    parser.add_argument("--results-file", type=str, default="analysis-results.json", help="Results file")
-    parser.add_argument("--commit-sha", type=str, help="Commit SHA for linking to files")
+    parser = argparse.ArgumentParser(description="Post analysis results as PR review comments")
+    parser.add_argument("--pr-number", type=str, required=True)
+    parser.add_argument("--repository", type=str, required=True)
+    parser.add_argument("--results-file", type=str, default="analysis-results.json")
+    parser.add_argument("--commit-sha", type=str, required=True, help="Commit SHA to comment on")
     
     args = parser.parse_args()
     
-    # Get GitHub token from environment
     github_token = os.getenv("GITHUB_TOKEN")
     if not github_token:
-        print("ERROR: GITHUB_TOKEN environment variable not set")
+        print("ERROR: GITHUB_TOKEN not set")
         return 1
     
     # Read analysis results
@@ -142,21 +144,49 @@ def main():
         print(f"ERROR: Results file not found: {args.results_file}")
         return 1
     except json.JSONDecodeError as e:
-        print(f"ERROR: Invalid JSON in results file: {e}")
+        print(f"ERROR: Invalid JSON: {e}")
         return 1
     
-    # Format comment
-    comment_body = format_comment(results, args.commit_sha)
+    pr_number = int(args.pr_number)
     
-    # Post comment
-    success = post_comment(
-        github_token=github_token,
-        repository=args.repository,
-        pr_number=int(args.pr_number),
-        comment_body=comment_body
-    )
+    # Post summary comment first
+    print("Posting summary comment...")
+    summary = format_summary_comment(results)
+    if not post_issue_comment(github_token, args.repository, pr_number, summary):
+        print("Failed to post summary comment")
+        return 1
     
-    return 0 if success else 1
+    # Post review comments on specific lines
+    total_comments = 0
+    for result in results:
+        file_path = result.get("file")
+        analysis = result.get("analysis", {})
+        issues = analysis.get("issues", [])
+        
+        for issue in issues:
+            line = issue.get("line")
+            if not line or line == "N/A":
+                print(f"Skipping {file_path} - no line number")
+                continue
+            
+            method = issue.get("method", "N/A")
+            print(f"Posting review comment on {file_path}:{line} ({method})")
+            
+            comment = format_review_comment(issue)
+            
+            if post_review_comment(
+                github_token,
+                args.repository,
+                pr_number,
+                args.commit_sha,
+                file_path,
+                line,
+                comment
+            ):
+                total_comments += 1
+    
+    print(f"\n✅ Posted {total_comments} review comment(s) + 1 summary")
+    return 0
 
 
 if __name__ == "__main__":

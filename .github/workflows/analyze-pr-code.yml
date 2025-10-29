@@ -53,6 +53,10 @@ on:
 jobs:
   analyze:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
     outputs:
       results-json: ${{ steps.analyze-step.outputs.results }}
       results-file: analysis-results.json
@@ -94,7 +98,7 @@ jobs:
             echo "results_file=analysis-results.json" >> $GITHUB_OUTPUT
           fi
         env:
-          GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN || github.token }}
           CURSOR_API_KEY: ${{ inputs.cursor_api_key || secrets.cursor_api_key || secrets.CURSOR_API_KEY }}
           PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
           REPOSITORY: ${{ inputs.repository || github.repository }}
@@ -108,12 +112,13 @@ jobs:
           retention-days: 30
       
       - name: Comment analysis results on PR
-        if: inputs.pr_number && (inputs.post_comment == true || inputs.post_comment == null)
+        if: (inputs.pr_number || github.event.pull_request.number) && (inputs.post_comment == true || inputs.post_comment == null)
         run: |
           python actions/analyze-pr-code/post_comment.py \
-            --pr-number "${{ inputs.pr_number }}" \
-            --repository "${{ inputs.repository }}" \
-            --results-file analysis-results.json
+            --pr-number "${{ inputs.pr_number || github.event.pull_request.number }}" \
+            --repository "${{ inputs.repository || github.repository }}" \
+            --results-file analysis-results.json \
+            --commit-sha "${{ github.event.pull_request.head.sha || github.sha }}"
         env:
-          GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN || github.token }}
 
