@@ -6,7 +6,7 @@ name: Orchestrator Example (Main Workflow)
 on:
   pull_request:
     types: [opened, synchronize]
-  issue_comment:
+  pull_request_review_comment:
     types: [created]
 
 permissions:
@@ -31,11 +31,10 @@ jobs:
     secrets:
       cursor_api_key: ${{ secrets.CURSOR_API_KEY }}
   
-  # Job 2: Check for /apply-logs trigger in comments
+  # Job 2: Check for /apply-logs trigger in review comments
   check-apply-trigger:
     if: |
-      github.event_name == 'issue_comment' &&
-      github.event.issue.pull_request &&
+      github.event_name == 'pull_request_review_comment' &&
       contains(github.event.comment.body, '/apply-logs')
     runs-on: ubuntu-latest
     outputs:
@@ -54,63 +53,71 @@ jobs:
       - name: Check if trigger is valid
         id: check
         run: |
-          # Check if comment contains /apply-logs
+          # Check if review comment contains /apply-logs
           if echo "${{ github.event.comment.body }}" | grep -q "/apply-logs"; then
             echo "triggered=true" >> $GITHUB_OUTPUT
+            echo "comment_body=${{ github.event.comment.body }}" >> $GITHUB_OUTPUT
             echo "✅ /apply-logs trigger detected"
           else
             echo "triggered=false" >> $GITHUB_OUTPUT
             echo "ℹ️  No /apply-logs trigger found"
           fi
   
-  # Job 3: Get latest analysis results
-  get-analysis-results:
+  # Job 3: Get parent review comment with issue details
+  get-issue-details:
     if: needs.check-apply-trigger.outputs.should_apply == 'true'
     needs: check-apply-trigger
     runs-on: ubuntu-latest
     outputs:
-      analysis_results: ${{ steps.get-results.outputs.results }}
+      comment_body: ${{ steps.get-comment.outputs.body }}
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Download latest analysis results
-        uses: dawidd6/action-download-artifact@v3
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          workflow: analyze-pr-code.yml
-          name: analysis-results
-          path: ./
-          pr: ${{ github.event.issue.number }}
+          python-version: '3.11'
       
-      - name: Read analysis results
-        id: get-results
+      - name: Install dependencies
+        run: pip install requests
+      
+      - name: Get parent comment details
+        id: get-comment
         run: |
-          if [ -f analysis-results.json ]; then
-            echo "results<<EOF" >> $GITHUB_OUTPUT
-            cat analysis-results.json >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-            echo "✅ Analysis results loaded"
+          python actions/apply-suggested-logs/check_apply_trigger.py \
+            --pr-number "${{ github.event.pull_request.number }}" \
+            --repository "${{ github.repository }}" \
+            --output-file trigger-info.json
+          
+          # Extract parent comment body
+          if [ -f trigger-info.json ]; then
+            COMMENT_BODY=$(cat trigger-info.json | python3 -c "import sys, json; print(json.load(sys.stdin)['parent_comment_body'])")
+            echo "body=$COMMENT_BODY" >> $GITHUB_OUTPUT
+            echo "✅ Got parent comment"
           else
-            echo "❌ No analysis results found"
+            echo "❌ No trigger info found"
             exit 1
           fi
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
   
   # Job 4: Apply logging improvements
   apply-logs:
     if: needs.check-apply-trigger.outputs.should_apply == 'true'
-    needs: [check-apply-trigger, get-analysis-results]
+    needs: [check-apply-trigger, get-issue-details]
     permissions:
       contents: write
       pull-requests: write
       issues: write
     uses: ./.github/workflows/apply-suggested-logs.yml
     with:
-      pr_number: ${{ github.event.issue.number }}
+      pr_number: ${{ github.event.pull_request.number }}
       repository: ${{ github.repository }}
-      analysis_results: ${{ needs.get-analysis-results.outputs.analysis_results }}
-      comment_id: ${{ needs.check-apply-trigger.outputs.comment_id }}
+      comment_body: ${{ needs.get-issue-details.outputs.comment_body }}
+      comment_id: ${{ github.event.comment.id }}
     secrets:
-      git_token: ${{ secrets.BOT_GITHUB_TOKEN }}
+      git_token: ${{ secrets.BOT_GITHUB_TOKEN || github.token }}
       cursor_api_key: ${{ secrets.CURSOR_API_KEY }}
 

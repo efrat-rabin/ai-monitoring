@@ -12,8 +12,12 @@ on:
         required: true
         type: string
       analysis_results:
-        description: 'Analysis results JSON'
-        required: true
+        description: 'Analysis results JSON (optional if comment_body provided)'
+        required: false
+        type: string
+      comment_body:
+        description: 'Review comment body with issue to apply'
+        required: false
         type: string
       comment_id:
         description: 'Comment ID that triggered the apply'
@@ -38,8 +42,12 @@ on:
         required: true
         type: string
       analysis_results:
-        description: 'Analysis results JSON'
-        required: true
+        description: 'Analysis results JSON (optional if comment_body provided)'
+        required: false
+        type: string
+      comment_body:
+        description: 'Review comment body with issue to apply'
+        required: false
         type: string
       comment_id:
         description: 'Comment ID that triggered the apply'
@@ -48,7 +56,7 @@ on:
     secrets:
       git_token:
         description: 'GitHub Token'
-        required: true
+        required: false
       cursor_api_key:
         description: 'Cursor API Key'
         required: true
@@ -83,11 +91,19 @@ jobs:
       - name: Run apply suggested logs script
         id: apply-logs
         run: |
-          python actions/apply-suggested-logs/main.py \
-            --pr-number "${{ inputs.pr_number }}" \
-            --repository "${{ inputs.repository }}" \
-            --analysis-results '${{ inputs.analysis_results }}' \
-            --comment-id "${{ inputs.comment_id }}"
+          if [ -n "${{ inputs.comment_body }}" ]; then
+            python actions/apply-suggested-logs/main.py \
+              --pr-number "${{ inputs.pr_number }}" \
+              --repository "${{ inputs.repository }}" \
+              --comment-body '${{ inputs.comment_body }}' \
+              --comment-id "${{ inputs.comment_id }}"
+          else
+            python actions/apply-suggested-logs/main.py \
+              --pr-number "${{ inputs.pr_number }}" \
+              --repository "${{ inputs.repository }}" \
+              --analysis-results '${{ inputs.analysis_results }}' \
+              --comment-id "${{ inputs.comment_id }}"
+          fi
         env:
           GITHUB_TOKEN: ${{ inputs.git_token || secrets.git_token }}
           CURSOR_API_KEY: ${{ inputs.cursor_api_key || secrets.cursor_api_key }}
