@@ -37,6 +37,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+          fetch-depth: 0
+      
+      - name: Fetch base branch
+        run: |
+          git fetch origin main:main
+          echo "Comparing against origin/main"
+          git diff --name-only main...HEAD | head -10
       
       - name: Set up Python
         uses: actions/setup-python@v5
