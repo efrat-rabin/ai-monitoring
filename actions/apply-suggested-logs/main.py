@@ -59,10 +59,6 @@ class LogApplier:
             print(f"No changes for {file_path}")
             return False
         
-        # Write improved code
-        with open(file_path, 'w') as f:
-            f.write(improved_code)
-        
         print(f"✓ Applied changes to {file_path}")
         return True
     
