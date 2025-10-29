@@ -88,17 +88,59 @@ class CursorAnalyzer:
         try:
             result = self.cursor_client.send_message(prompt, context=context)
             
-            # Parse result
+            # Parse result - handle various response formats
             if isinstance(result, list):
                 return result
-            elif isinstance(result, dict) and 'results' in result:
-                return result['results']
+            elif isinstance(result, dict):
+                # Try various dict keys that might contain results
+                for key in ['results', 'analysis', 'files', 'data', 'items']:
+                    if key in result and isinstance(result[key], list):
+                        return result[key]
+                
+                # If dict has file path keys, convert to list format
+                if any(isinstance(v, dict) for v in result.values()):
+                    formatted_results = []
+                    for file_path, analysis in result.items():
+                        if isinstance(analysis, dict):
+                            formatted_results.append({
+                                'file': file_path,
+                                'analysis': analysis
+                            })
+                    if formatted_results:
+                        return formatted_results
+                
+                # Single file analysis - wrap in list
+                print(f"Got dict result, wrapping as single file analysis")
+                return [{
+                    'file': file_paths[0] if file_paths else 'unknown',
+                    'analysis': result
+                }]
+            elif isinstance(result, str):
+                # Try to parse string as JSON
+                try:
+                    parsed = json.loads(result)
+                    if isinstance(parsed, list):
+                        return parsed
+                    elif isinstance(parsed, dict):
+                        return [{'file': file_paths[0] if file_paths else 'unknown', 'analysis': parsed}]
+                except json.JSONDecodeError:
+                    pass
+                
+                # Return raw text as analysis
+                print(f"Got text result, wrapping as analysis")
+                return [{
+                    'file': file_paths[0] if file_paths else 'unknown',
+                    'analysis': {'response': result}
+                }]
             else:
-                print(f"Unexpected result format: {type(result)}")
+                print(f"ERROR: Unexpected result format: {type(result)}")
+                print(f"Result preview: {str(result)[:500]}")
                 return []
                 
         except Exception as e:
             print(f"ERROR: Failed to analyze files: {e}")
+            import traceback
+            traceback.print_exc()
             return []
     
     def _generate_mock_results(self, file_paths: List[str]) -> List[Dict[str, Any]]:
