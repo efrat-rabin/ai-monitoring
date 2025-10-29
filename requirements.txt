@@ -1,4 +1,4 @@
 # Python dependencies for GitHub Actions
-# No external dependencies required for basic functionality
-# The scripts use only Python standard library
+requests>=2.31.0
+pyyaml>=6.0
 
