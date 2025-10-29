@@ -23,7 +23,11 @@ permissions:
 jobs:
   # Job 1: Run analysis when PR is opened/updated
   analyze:
-    if: github.event_name == 'pull_request'
+    if: |
+      github.event_name == 'pull_request' &&
+      github.actor != 'github-actions[bot]' &&
+      !contains(github.event.head_commit.message, '[skip ci]') &&
+      !contains(github.event.head_commit.message, '🤖 Apply AI-suggested')
     permissions:
       contents: read
       pull-requests: write
@@ -117,7 +121,7 @@ jobs:
         run: |
           if [[ -n $(git status --porcelain) ]]; then
             git add .
-            git commit -m "🤖 Apply AI-suggested logging improvements
+            git commit -m "🤖 Apply AI-suggested logging improvements [skip ci]
             
             Applied in response to review comment.
             
