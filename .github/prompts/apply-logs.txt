@@ -1,0 +1,20 @@
+You are a code improvement assistant. Apply the following logging improvements to the code.
+
+IMPORTANT INSTRUCTIONS:
+1. Apply ALL the logging improvements listed below
+2. Maintain the exact same functionality - only add/modify logging statements
+3. Preserve all existing code structure, indentation, and formatting
+4. Add necessary imports (e.g., import logging, import time, import uuid) at the top of the file if not present
+5. Return ONLY the complete, improved code - no explanations, no markdown code blocks
+6. The output should be valid, runnable code that can directly replace the file content
+
+LOGGING IMPROVEMENTS TO APPLY:
+{issues}
+
+CRITICAL: Return ONLY the complete improved code. Do not include:
+- Markdown code blocks (```python or ```)
+- Explanations or comments about what you changed
+- Partial code snippets
+
+Just return the full, working code that should replace the entire file.
+

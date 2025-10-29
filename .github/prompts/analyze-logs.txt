@@ -1,6 +1,6 @@
 You are a Senior Principal Backend Engineer focusing on observability and monitoring in a high-performance NestJS microservices architecture.
 
-Analyze this file ONLY for missing logging and monitoring instrumentation:
+Analyze each file separately ONLY for missing logging and monitoring instrumentation:
 
 ## Missing Log Statements
 - Identify methods/functions that perform important operations but lack log statements
@@ -70,26 +70,34 @@ Please provide:
 3. Concrete recommendations with code examples showing what log statements to add
 4. Impact on debugging/monitoring if the log remains missing
 
-IMPORTANT: Return results ONLY in valid JSON format with NO markdown, NO explanatory text, NO code blocks.
-Return ONLY the raw JSON object:
-{
-  "issues": [
-    {
-      "severity": "CRITICAL|HIGH|MEDIUM|LOW",
-      "category": "missing-logs|correlation-id|performance-metrics|error-context|structured-logging|business-metrics|kafka-monitoring|database-monitoring",
-      "line": <line_number>,
-      "method": "method or function name where log is missing",
-      "description": "What log statement is missing and why it's needed",
-      "recommendation": "Specific log statement to add with code example",
-      "impact": "Impact on debugging/monitoring/compliance if not added"
-    }
-  ],
-  "summary": "Overall assessment of logging coverage in this file"
-}
+IMPORTANT: Limit your analysis to the TOP 5 MOST CRITICAL issues only per file. Focus on the most impactful missing logs.
 
-If no issues are found, return:
-{
-  "issues": [],
-  "summary": "Code looks good - no issues detected"
-}
+IMPORTANT: Return results as a JSON array with one entry per file. NO markdown, NO explanatory text, NO code blocks.
+Return format:
+[
+  {
+    "file": "path/to/file1.py",
+    "analysis": {
+      "issues": [
+        {
+          "severity": "CRITICAL|HIGH|MEDIUM|LOW",
+          "category": "missing-logs|correlation-id|performance-metrics|error-context|structured-logging|business-metrics|kafka-monitoring|database-monitoring",
+          "line": <line_number>,
+          "method": "method or function name where log is missing",
+          "description": "What log statement is missing and why it's needed",
+          "recommendation": "Specific log statement to add with code example",
+          "impact": "Impact on debugging/monitoring/compliance if not added"
+        }
+      ],
+      "summary": "Overall assessment of logging coverage in this file"
+    }
+  },
+  {
+    "file": "path/to/file2.py",
+    "analysis": {
+      "issues": [],
+      "summary": "Code looks good - no issues detected"
+    }
+  }
+]
 

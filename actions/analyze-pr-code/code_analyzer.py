@@ -57,42 +57,80 @@ class CursorAnalyzer:
             print("ERROR: Cursor CLI setup verification failed")
             return False
     
-    def analyze_file(self, file_path: str, prompt: str) -> Dict[str, Any]:
-        """Analyze a single file using cursor-agent."""
-        print(f"\n{'='*50}")
-        print(f"Analyzing file: {file_path}")
+    def analyze_files(self, file_paths: List[str], prompt: str, test_mode: bool = False) -> List[Dict[str, Any]]:
+        """Analyze multiple files in one request using cursor-agent."""
+        print(f"Analyzing {len(file_paths)} files in batch...")
         
-        if not os.path.exists(file_path):
-            print(f"ERROR: File does not exist: {file_path}")
-            return {"error": "File not found"}
+        # Test mode: return mock data
+        if test_mode:
+            print("[TEST MODE] Using mock analysis results")
+            return self._generate_mock_results(file_paths)
         
-        file_size = sum(1 for _ in open(file_path))
-        print(f"File size: {file_size} lines")
-        print(f"{'='*50}")
+        if not self.cursor_client:
+            self.cursor_client = CursorClient(api_key=self.cursor_api_key)
+        
+        # Build context with all files
+        context = "Analyze the following files:\n\n"
+        
+        for file_path in file_paths:
+            if not os.path.exists(file_path):
+                print(f"Skipping {file_path} - file not found")
+                continue
+            
+            try:
+                with open(file_path, 'r') as f:
+                    file_content = f.read()
+                context += f"=== FILE: {file_path} ===\n{file_content}\n\n"
+            except Exception as e:
+                print(f"Error reading {file_path}: {e}")
         
         try:
-            # Read file content as context
-            with open(file_path, 'r') as f:
-                file_content = f.read()
-            
-            # Use CursorClient to send message
-            if not self.cursor_client:
-                self.cursor_client = CursorClient(api_key=self.cursor_api_key)
-            
-            context = f"File: {file_path}\n\n{file_content}"
-            
-            print("Running cursor-agent command...")
             result = self.cursor_client.send_message(prompt, context=context)
             
-            print("Parsed analysis JSON:")
-            print(json.dumps(result, indent=2))
-            print(f"{'='*50}")
-            
-            return result if isinstance(result, dict) else {"result": result}
-            
+            # Parse result
+            if isinstance(result, list):
+                return result
+            elif isinstance(result, dict) and 'results' in result:
+                return result['results']
+            else:
+                print(f"Unexpected result format: {type(result)}")
+                return []
+                
         except Exception as e:
-            print(f"ERROR: Failed to analyze file: {e}")
-            return {"error": str(e)}
+            print(f"ERROR: Failed to analyze files: {e}")
+            return []
+    
+    def _generate_mock_results(self, file_paths: List[str]) -> List[Dict[str, Any]]:
+        """Generate mock analysis results for testing."""
+        results = []
+        for file_path in file_paths:
+            results.append({
+                "file": file_path,
+                "analysis": {
+                    "issues": [
+                        {
+                            "severity": "HIGH",
+                            "category": "structured-logging",
+                            "line": 10,
+                            "method": "example_function",
+                            "description": "[MOCK] Uses print() instead of structured logging",
+                            "recommendation": "Replace print() with logger.info() for structured logging",
+                            "impact": "Logs cannot be parsed or filtered in production"
+                        },
+                        {
+                            "severity": "MEDIUM",
+                            "category": "error-context",
+                            "line": 25,
+                            "method": "error_handler",
+                            "description": "[MOCK] Missing error context in exception handler",
+                            "recommendation": "Add logger.error() with exc_info=True",
+                            "impact": "Difficult to debug production errors"
+                        }
+                    ],
+                    "summary": "[MOCK] File has 2 logging issues that should be addressed"
+                }
+            })
+        return results
 
 
 class GitHubPRAnalyzer:
@@ -155,6 +193,8 @@ def main():
     parser.add_argument('--output-file', type=str,
                        default='analysis-results.json',
                        help='Output file for analysis results')
+    parser.add_argument('--test-mode', action='store_true',
+                       help='Use mock data instead of calling Cursor API')
     
     args = parser.parse_args()
     
@@ -193,14 +233,18 @@ def main():
     # Initialize Cursor analyzer
     cursor = CursorAnalyzer(cursor_api_key)
     
-    # Install and verify Cursor CLI
-    if not cursor.install_cursor_cli():
-        print("ERROR: Failed to install Cursor CLI")
-        return 1
-    
-    if not cursor.verify_setup():
-        print("ERROR: Cursor CLI setup verification failed")
-        return 1
+    # Skip Cursor CLI setup in test mode
+    if not args.test_mode:
+        # Install and verify Cursor CLI
+        if not cursor.install_cursor_cli():
+            print("ERROR: Failed to install Cursor CLI")
+            return 1
+        
+        if not cursor.verify_setup():
+            print("ERROR: Cursor CLI setup verification failed")
+            return 1
+    else:
+        print("[TEST MODE] Skipping Cursor CLI setup")
     
     # Get changed files
     pr_analyzer = GitHubPRAnalyzer(github_token, repository, pr_number)
@@ -213,16 +257,9 @@ def main():
             json.dump([], f, indent=2)
         return 0
     
-    # Analyze each file
-    print(f"\n=== Starting Analysis of {len(changed_files)} files ===\n")
-    results = []
-    
-    for file_path in changed_files:
-        analysis = cursor.analyze_file(file_path, prompt)
-        results.append({
-            "file": file_path,
-            "analysis": analysis
-        })
+    # Analyze all files in one request
+    print(f"\n=== Analyzing {len(changed_files)} files ===\n")
+    results = cursor.analyze_files(changed_files, prompt, test_mode=args.test_mode)
     
     # Write results to file
     print(f"\n=== Analysis Complete ===")
@@ -231,10 +268,6 @@ def main():
     
     print(f"Results written to {args.output_file}")
     print(f"Total files analyzed: {len(results)}")
-    
-    # Pretty print final output
-    print("\nFinal Analysis Results:")
-    print(json.dumps(results, indent=2))
     
     return 0
 

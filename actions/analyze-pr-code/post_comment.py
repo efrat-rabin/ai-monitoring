@@ -62,6 +62,11 @@ def format_comment(results: List[Dict[str, Any]], commit_sha: str = "") -> str:
             
             comment += "---\n\n"
     
+    comment += "### 🤖 Auto-Apply Available\n\n"
+    comment += "Want to automatically apply these logging improvements? Reply to this comment with:\n\n"
+    comment += "```\n/apply-logs\n```\n\n"
+    comment += "The AI will automatically apply all suggested improvements and commit them to this PR.\n\n"
+    comment += "---\n\n"
     comment += "*Analysis powered by Cursor AI*\n"
     return comment
 
