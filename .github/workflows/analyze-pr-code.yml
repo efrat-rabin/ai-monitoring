@@ -15,6 +15,11 @@ on:
         description: 'Cursor API Key'
         required: false
         type: string
+      test_mode:
+        description: 'Use mock data instead of calling Cursor API'
+        required: false
+        default: false
+        type: boolean
       post_comment:
         description: 'Post comment on PR with results'
         required: false
@@ -73,13 +78,15 @@ jobs:
       - name: Run analyze PR code script
         id: analyze-step
         run: |
-          python actions/analyze-pr-code/code_analyzer.py
+          if [ "${{ inputs.test_mode }}" = "true" ]; then
+            python actions/analyze-pr-code/code_analyzer.py --test-mode
+          else
+            python actions/analyze-pr-code/code_analyzer.py
+          fi
           
-          # Export results as output
+          # Export results as output (write to file instead of multiline output)
           if [ -f analysis-results.json ]; then
-            echo "results<<EOF" >> $GITHUB_OUTPUT
-            cat analysis-results.json >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
+            echo "results_file=analysis-results.json" >> $GITHUB_OUTPUT
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
