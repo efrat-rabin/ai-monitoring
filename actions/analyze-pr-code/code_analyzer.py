@@ -354,11 +354,20 @@ def main():
         # Write empty results
         with open(args.output_file, 'w') as f:
             json.dump([], f, indent=2)
+        
+        # Set output for GitHub Actions
+        github_output = os.getenv('GITHUB_OUTPUT')
+        if github_output:
+            with open(github_output, 'a') as f:
+                f.write("has_issues=false\n")
+                f.write("total_issues=0\n")
+        
+        print("\n✓ No files to analyze - skipping")
         return 0
     
     # Analyze all files in one request
     print(f"\n=== Analyzing {len(changed_files)} files ===\n")
-    results = cursor.analyze_files(changed_files, prompt, test_mode=args.test_mode)
+    results = cursor.analyze_files(changed_files, prompt, test_mode=args.test_mode, verbose=verbose)
     
     # Write results to file
     print(f"\n=== Analysis Complete ===")
@@ -368,11 +377,30 @@ def main():
     print(f"Results written to {args.output_file}")
     print(f"Total files analyzed: {len(results)}")
     
+    # Check if any issues were found
+    total_issues = 0
+    for result in results:
+        if 'analysis' in result and 'issues' in result['analysis']:
+            total_issues += len(result['analysis']['issues'])
+    
+    print(f"Total issues found: {total_issues}")
+    
+    # Set output for GitHub Actions
+    github_output = os.getenv('GITHUB_OUTPUT')
+    if github_output:
+        with open(github_output, 'a') as f:
+            f.write(f"has_issues={'true' if total_issues > 0 else 'false'}\n")
+            f.write(f"total_issues={total_issues}\n")
+    
     # Print results to logs if verbose is enabled
     if verbose:
         print(f"\n=== Analysis Results JSON ===")
         print(json.dumps(results, indent=2))
         print(f"=== End Analysis Results ===\n")
+    
+    # Exit with message if no issues found
+    if total_issues == 0:
+        print("\n✓ No issues found - analysis complete!")
     
     return 0
 

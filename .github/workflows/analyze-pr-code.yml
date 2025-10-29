@@ -129,7 +129,7 @@ jobs:
           retention-days: 30
       
       - name: Comment analysis results on PR
-        if: (inputs.pr_number || github.event.pull_request.number) && (inputs.post_comment == true || inputs.post_comment == null)
+        if: steps.analyze-step.outputs.has_issues == 'true' && (inputs.pr_number || github.event.pull_request.number) && (inputs.post_comment == true || inputs.post_comment == null)
         run: |
           python actions/analyze-pr-code/post_comment.py \
             --pr-number "${{ inputs.pr_number || github.event.pull_request.number }}" \
