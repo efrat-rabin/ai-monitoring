@@ -281,6 +281,7 @@ def main():
     cursor_api_key = os.getenv('CURSOR_API_KEY')
     pr_number = args.pr_number or os.getenv('PR_NUMBER')
     repository = args.repository or os.getenv('REPOSITORY')
+    verbose = os.getenv('VERBOSE', 'true').lower() in ('true', '1', 'yes')
     
     print("=== Analyze PR Code Action ===")
     print(f"PR Number: {pr_number}")
@@ -346,6 +347,12 @@ def main():
     
     print(f"Results written to {args.output_file}")
     print(f"Total files analyzed: {len(results)}")
+    
+    # Print results to logs if verbose is enabled
+    if verbose:
+        print(f"\n=== Analysis Results JSON ===")
+        print(json.dumps(results, indent=2))
+        print(f"=== End Analysis Results ===\n")
     
     return 0
 

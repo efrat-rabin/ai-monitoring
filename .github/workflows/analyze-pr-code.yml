@@ -25,6 +25,11 @@ on:
         required: false
         default: true
         type: boolean
+      verbose:
+        description: 'Print analysis results to logs'
+        required: false
+        default: true
+        type: boolean
   workflow_call:
     inputs:
       pr_number:
@@ -44,6 +49,11 @@ on:
         description: 'Use mock data instead of calling Cursor API'
         required: false
         default: false
+        type: boolean
+      verbose:
+        description: 'Print analysis results to logs'
+        required: false
+        default: true
         type: boolean
     secrets:
       cursor_api_key:
@@ -108,6 +118,7 @@ jobs:
           CURSOR_API_KEY: ${{ inputs.cursor_api_key || secrets.cursor_api_key || secrets.CURSOR_API_KEY }}
           PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
           REPOSITORY: ${{ inputs.repository || github.repository }}
+          VERBOSE: ${{ inputs.verbose != false }}
       
       - name: Upload analysis results
         uses: actions/upload-artifact@v4
