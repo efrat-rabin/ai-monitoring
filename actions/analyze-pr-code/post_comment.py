@@ -69,10 +69,10 @@ def format_summary_comment(results: List[Dict[str, Any]]) -> str:
             if issues:
                 comment += f"- `{file_path}`: {len(issues)} issue(s)\n"
     else:
-        comment += "✅ No logging issues found. Great job!\n\n"
+        comment += "✅ No logging issues found. Great job!\n\n"  
     
     comment += "\n*Analysis powered by Cursor AI*\n"
-    return comment
+    return comment  
 
 
 def post_issue_comment(
@@ -92,7 +92,7 @@ def post_issue_comment(
     
     try:
         response = requests.post(url, headers=headers, json={"body": comment_body})
-        response.raise_for_status()
+        response.raise_for_status()   
         print(f"✅ Posted comment")
         return True
     except Exception as e:

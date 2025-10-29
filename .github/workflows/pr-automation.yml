@@ -67,49 +67,36 @@ jobs:
       - name: Get parent review comment
         id: get-parent
         run: |
-          echo "Debug: PR Number = ${{ github.event.pull_request.number }}"
-          echo "Debug: Repository = ${{ github.repository }}"
-          echo "Debug: Comment ID = ${{ github.event.comment.id }}"
-          
           python actions/apply-suggested-logs/check_apply_trigger.py \
             --pr-number "${{ github.event.pull_request.number }}" \
             --repository "${{ github.repository }}" \
             --output-file trigger-info.json
           
           if [ -f trigger-info.json ]; then
-            echo "Debug: trigger-info.json contents:"
-            cat trigger-info.json
-            
             PARENT_BODY=$(cat trigger-info.json | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('parent_comment_body', ''))")
-            
-            echo "Debug: Parent body length = ${#PARENT_BODY}"
-            echo "Debug: Has HTML comment = $(echo "$PARENT_BODY" | grep -c '<!--' || echo '0')"
-            
             echo "parent_body<<EOF" >> $GITHUB_OUTPUT
             echo "$PARENT_BODY" >> $GITHUB_OUTPUT
             echo "EOF" >> $GITHUB_OUTPUT
-          else
-            echo "ERROR: trigger-info.json not found"
-            exit 1
           fi
         env:
           GITHUB_TOKEN: ${{ github.token }}
       
       - name: Apply logging improvements
         run: |
-          echo "Debug: Applying with comment body (first 200 chars):"
-          echo "${{ steps.get-parent.outputs.parent_body }}" | head -c 200
-          echo ""
-          echo "..."
+          # Write comment body to file to avoid shell escaping issues
+          echo "$COMMENT_BODY" > /tmp/comment_body.txt
+          
+          echo "Debug: Comment body written to file (size: $(wc -c < /tmp/comment_body.txt) bytes)"
           
           python actions/apply-suggested-logs/main.py \
             --pr-number "${{ github.event.pull_request.number }}" \
             --repository "${{ github.repository }}" \
-            --comment-body "${{ steps.get-parent.outputs.parent_body }}" \
+            --comment-body-file /tmp/comment_body.txt \
             --comment-id "${{ github.event.comment.id }}"
         env:
           GITHUB_TOKEN: ${{ github.token }}
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          COMMENT_BODY: ${{ steps.get-parent.outputs.parent_body }}
       
       - name: Commit and push changes
         run: |
