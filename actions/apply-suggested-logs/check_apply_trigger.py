@@ -8,10 +8,10 @@ import json
 import requests
 
 
-def get_pr_comments(github_token: str, repository: str, pr_number: int):
-    """Get comments on a PR."""
+def get_pr_review_comments(github_token: str, repository: str, pr_number: int):
+    """Get review comments on a PR."""
     owner, repo = repository.split("/")
-    url = f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_number}/comments"
+    url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/comments"
     headers = {
         "Authorization": f"Bearer {github_token}",
         "Accept": "application/vnd.github+json",
@@ -22,18 +22,17 @@ def get_pr_comments(github_token: str, repository: str, pr_number: int):
     return response.json()
 
 
-def check_for_trigger(comments, analysis_comment_id=None):
-    """Check if any comment contains /apply-logs trigger and extract the parent comment."""
+def check_for_trigger(comments):
+    """Check if any review comment reply contains /apply-logs trigger."""
     for comment in comments:
-        body = comment.get('body', '').strip().lower()
+        body = comment.get('body', '').strip()
         
-        if '/apply-logs' in body:
-            # Find the parent comment (the one being replied to)
-            # Look for the comment that contains the issue details
+        if '/apply-logs' in body.lower():
+            # For review comments, in_reply_to_id points to the parent review comment
             parent_id = comment.get('in_reply_to_id')
             
             if parent_id:
-                # Find the parent comment
+                # Find the parent review comment
                 for parent_comment in comments:
                     if parent_comment.get('id') == parent_id:
                         return {
@@ -41,8 +40,8 @@ def check_for_trigger(comments, analysis_comment_id=None):
                             'parent_comment': parent_comment
                         }
             
-            # If no parent, the comment itself might contain the issue
-            if '## 🤖 Logging Suggestion' in comment.get('body', ''):
+            # If no parent, check if this comment itself has the suggestion
+            if '🤖' in comment.get('body', ''):
                 return {
                     'trigger_comment': comment,
                     'parent_comment': comment
@@ -64,9 +63,8 @@ def main():
         print("ERROR: GITHUB_TOKEN not set")
         return 1
     
-    comments = get_pr_comments(github_token, args.repository, int(args.pr_number))
-    analysis_comment_id = int(args.analysis_comment_id) if args.analysis_comment_id else None
-    trigger_data = check_for_trigger(comments, analysis_comment_id)
+    comments = get_pr_review_comments(github_token, args.repository, int(args.pr_number))
+    trigger_data = check_for_trigger(comments)
     
     if trigger_data:
         trigger_comment = trigger_data['trigger_comment']

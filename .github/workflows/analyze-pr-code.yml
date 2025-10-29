@@ -117,7 +117,8 @@ jobs:
           python actions/analyze-pr-code/post_comment.py \
             --pr-number "${{ inputs.pr_number || github.event.pull_request.number }}" \
             --repository "${{ inputs.repository || github.repository }}" \
-            --results-file analysis-results.json
+            --results-file analysis-results.json \
+            --commit-sha "${{ github.event.pull_request.head.sha || github.sha }}"
         env:
           GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN || github.token }}
 
