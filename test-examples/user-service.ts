@@ -338,5 +338,73 @@ export class UserService {
       throw error;
     }
   }
+
+  /**
+   * Sends a message to cursor-agent API
+   * Performs external API calls with comprehensive logging
+   */
+  async send_message(prompt: string, context?: any): Promise<any> {
+    const correlationId = randomUUID();
+    const startTime = Date.now();
+    const promptLength = prompt?.length || 0;
+    const truncatedPrompt = prompt ? (prompt.length > 100 ? prompt.substring(0, 100) + '...' : prompt) : '';
+
+    this.logger.log('sending_cursor_message', {
+      prompt_length: promptLength,
+      has_context: !!context,
+      correlation_id: correlationId,
+      truncated_prompt: truncatedPrompt,
+    });
+
+    try {
+      const response = await fetch('https://cursor-agent.com/api/message', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt,
+          context,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unable to read error response');
+        const durationMs = Date.now() - startTime;
+        this.logger.error('cursor_message_failed', {
+          error: `HTTP ${response.status}: ${errorText}`,
+          stderr: errorText,
+          duration_ms: durationMs,
+          correlation_id: correlationId,
+          prompt_length: promptLength,
+        });
+        throw new Error(`Cursor API call failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      const durationMs = Date.now() - startTime;
+      const responseSize = JSON.stringify(result).length;
+
+      this.logger.log('cursor_message_success', {
+        duration_ms: durationMs,
+        response_size: responseSize,
+        correlation_id: correlationId,
+        prompt_length: promptLength,
+      });
+
+      return result;
+    } catch (error) {
+      const durationMs = Date.now() - startTime;
+      this.logger.error('cursor_message_failed', {
+        error: error instanceof Error ? error.message : String(error),
+        stderr: error instanceof Error ? error.stack : undefined,
+        duration_ms: durationMs,
+        correlation_id: correlationId,
+        prompt_length: promptLength,
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      throw error;
+    }
+  }
 }
 
