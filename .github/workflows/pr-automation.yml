@@ -19,9 +19,7 @@ jobs:
   analyze:
     if: |
       github.event_name == 'pull_request' &&
-      github.actor != 'github-actions[bot]' &&
-      !contains(github.event.head_commit.message, '[skip ci]') &&
-      !contains(github.event.head_commit.message, '🤖 Apply AI-suggested')
+      github.actor != 'github-actions[bot]'
     permissions:
       contents: read
       pull-requests: write
@@ -110,7 +108,7 @@ jobs:
         run: |
           if [[ -n $(git status --porcelain) ]]; then
             git add .
-            git commit -m "🤖 Apply AI-suggested logging improvements [skip ci]
+            git commit -m "🤖 Apply AI-suggested logging improvements
             
             Applied in response to review comment.
             
