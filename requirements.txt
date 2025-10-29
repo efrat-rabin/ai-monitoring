@@ -1,5 +1,4 @@
 # Python dependencies for GitHub Actions
-# Add your dependencies here, for example:
-# requests>=2.31.0
-# PyGithub>=2.1.1
+# No external dependencies required for basic functionality
+# The scripts use only Python standard library
 
