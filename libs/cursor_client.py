@@ -2,7 +2,7 @@
 """
 Cursor CLI Client
 Simple wrapper for sending messages to Cursor CLI.
-"""
+""" 
 
 import os
 import subprocess
