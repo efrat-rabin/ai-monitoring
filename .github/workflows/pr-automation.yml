@@ -70,6 +70,8 @@ jobs:
           python actions/apply-suggested-logs/check_apply_trigger.py \
             --pr-number "${{ github.event.pull_request.number }}" \
             --repository "${{ github.repository }}" \
+            --comment-id "${{ github.event.comment.id }}" \
+            --in-reply-to-id "${{ github.event.comment.in_reply_to_id }}" \
             --output-file trigger-info.json
           
           if [ -f trigger-info.json ]; then
