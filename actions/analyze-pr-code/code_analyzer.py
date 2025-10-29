@@ -9,6 +9,7 @@ import sys
 import argparse
 import subprocess
 import json
+import requests
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
@@ -169,7 +170,7 @@ class GitHubPRAnalyzer:
         self.pr_number = pr_number
     
     def get_changed_files(self, file_patterns: Optional[List[str]] = None) -> List[str]:
-        """Get list of changed files in the PR."""
+        """Get list of changed files in the PR using GitHub API."""
         if file_patterns is None:
             file_patterns = ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx', 
                            '**/*.py', '**/*.go']
@@ -177,22 +178,39 @@ class GitHubPRAnalyzer:
         print(f"Getting changed files for PR #{self.pr_number}...")
         
         try:
-            # Use git diff to get changed files (only files in the diff)
-            result = subprocess.run(
-                ['git', 'diff', '--name-only', '--diff-filter=ACMR', 'origin/main...HEAD'],
-                capture_output=True,
-                text=True,
-                check=True
-            )
+            # Use GitHub API to get PR files
+            api_url = f"https://api.github.com/repos/{self.repository}/pulls/{self.pr_number}/files"
+            headers = {
+                'Authorization': f'token {self.github_token}',
+                'Accept': 'application/vnd.github.v3+json'
+            }
             
-            all_files = [f.strip() for f in result.stdout.split('\n') if f.strip()]
+            response = requests.get(api_url, headers=headers)
+            response.raise_for_status()
+            
+            pr_files = response.json()
+            print(f"Found {len(pr_files)} total files in PR")
+            
+            # Extract filenames (only added or modified, not deleted)
+            all_files = []
+            for file_info in pr_files:
+                status = file_info.get('status', '')
+                filename = file_info.get('filename', '')
+                
+                # Include: added, modified, renamed, copied
+                # Exclude: removed, deleted
+                if status in ['added', 'modified', 'renamed', 'copied'] and filename:
+                    all_files.append(filename)
+                    print(f"  - {filename} ({status})")
+            
+            print(f"Found {len(all_files)} added/modified files")
             
             # Filter by file patterns and verify files exist
             filtered_files = []
             for file in all_files:
-                # Check if file exists (not deleted)
+                # Check if file exists (should exist if added/modified)
                 if not os.path.exists(file):
-                    print(f"Skipping {file} - file deleted")
+                    print(f"Skipping {file} - file not found locally")
                     continue
                 
                 file_path = Path(file)
@@ -203,14 +221,17 @@ class GitHubPRAnalyzer:
                         filtered_files.append(file)
                         break
             
-            print(f"Found {len(filtered_files)} changed files in PR diff")
+            print(f"Found {len(filtered_files)} changed files matching patterns")
             if filtered_files:
-                print(f"Files: {', '.join(filtered_files)}")
+                print(f"Files to analyze: {', '.join(filtered_files)}")
             
             return filtered_files
             
-        except subprocess.CalledProcessError as e:
-            print(f"ERROR: Failed to get changed files: {e}")
+        except requests.exceptions.RequestException as e:
+            print(f"ERROR: Failed to get changed files from GitHub API: {e}")
+            return []
+        except Exception as e:
+            print(f"ERROR: Unexpected error getting changed files: {e}")
             return []
 
 
