@@ -16,7 +16,7 @@ def format_review_comment(issue: Dict[str, Any]) -> str:
     """Format a single issue as a review comment."""
     severity = issue.get("severity", "MEDIUM")
     category = issue.get("category", "general")
-    method = issue.get("method", "N/A")
+    method = issue.get("method", "N/A") 
     
     comment = f"**🤖 {severity}** - {category}\n\n"
     
