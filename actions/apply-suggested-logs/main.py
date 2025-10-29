@@ -192,13 +192,11 @@ def main():
     parser.add_argument('--comment-id', type=str)
     parser.add_argument('--prompt-file', type=str, 
                        default='.github/prompts/apply-logs.txt')
-    parser.add_argument('--verbose', type=str, default="true",
-                       help='Enable verbose logging (true/false)')
     
     args = parser.parse_args()
     
-    # Parse verbose flag from string or environment
-    verbose = os.getenv('VERBOSE', args.verbose).lower() in ('true', '1', 'yes')
+    # Use GitHub Actions' native debug mode
+    verbose = os.getenv('ACTIONS_STEP_DEBUG', 'false').lower() in ('true', '1')
     
     if verbose:
         print(f"[DEBUG] Running apply-suggested-logs/main.py with verbose mode")

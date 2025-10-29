@@ -51,12 +51,10 @@ def main():
     parser.add_argument("--pr-number", type=str, required=True)
     parser.add_argument("--repository", type=str, required=True)
     parser.add_argument("--comment-id", type=str)
-    parser.add_argument("--verbose", type=str, default="true",
-                       help="Enable verbose logging (true/false)")
     args = parser.parse_args()
     
-    # Parse verbose flag from string or environment
-    verbose = os.getenv('VERBOSE', args.verbose).lower() in ('true', '1', 'yes')
+    # Use GitHub Actions' native debug mode
+    verbose = os.getenv('ACTIONS_STEP_DEBUG', 'false').lower() in ('true', '1')
     
     if verbose:
         print(f"[DEBUG] Running post_apply_comment.py with verbose mode")
