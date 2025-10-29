@@ -1,0 +1,32 @@
+# Environment Variables Configuration Template
+# Copy these to your shell environment or CI/CD secrets
+
+# Required: Cursor API Key for AI analysis
+# Get your key from Cursor settings
+export CURSOR_API_KEY="your-cursor-api-key-here"
+
+# Optional: Use OpenAI directly instead
+# export OPENAI_API_KEY="your-openai-api-key-here"
+
+# Optional: Custom API base URL (defaults to Cursor API)
+# export CURSOR_API_BASE_URL="https://api.cursor.sh/v1"
+
+# Required: Groundcover API Key
+# Get your key by running: groundcover auth get-datasources-api-key
+export GROUNDCOVER_API_KEY="your-groundcover-api-key-here"
+
+# Optional: Custom Groundcover API URL
+# Default: https://api.groundcover.com
+export GROUNDCOVER_API_URL="https://api.groundcover.com"
+
+# Optional: GitHub-related variables (for workflow integration)
+export GITHUB_TOKEN="your-github-token-here"
+export PR_NUMBER="123"
+export REPOSITORY="owner/repo"
+
+# Usage:
+# 1. Copy this file: cp config.template config.sh
+# 2. Edit config.sh with your actual values
+# 3. Source it: source config.sh
+# 4. Run the script: python main.py --log-line '{"level":"error","message":"test"}'
+
