@@ -29,7 +29,7 @@ jobs:
       pr_number: ${{ github.event.pull_request.number }}
       repository: ${{ github.repository }}
       post_comment: true
-      test_mode: true
+      test_mode: false
     secrets:
       cursor_api_key: ${{ secrets.CURSOR_API_KEY }}
   
