@@ -286,7 +286,7 @@ def main():
     parser.add_argument('--pr-number', type=str, help='Pull request number')
     parser.add_argument('--repository', type=str, help='Repository (owner/repo)')
     parser.add_argument('--prompt-file', type=str, 
-                       default='.github/prompts/analyze-logs.txt',
+                       default='.ai-monitoring/.github/prompts/analyze-logs.txt',
                        help='Path to prompt file')
     parser.add_argument('--output-file', type=str,
                        default='analysis-results.json',
