@@ -52,6 +52,17 @@ def apply_patch(file_path: str, patch_content: str, verbose: bool = False) -> bo
         print(f"❌ No patch provided - cannot apply changes")
         return False
     
+    # Ensure patch has proper newlines (JSON may have escaped them)
+    # Replace literal \n with actual newlines if needed
+    if '\\n' in patch_content and '\n' not in patch_content:
+        patch_content = patch_content.replace('\\n', '\n')
+        if verbose:
+            print(f"[DEBUG] Unescaped newlines in patch")
+    
+    # Ensure patch ends with newline
+    if not patch_content.endswith('\n'):
+        patch_content += '\n'
+    
     if verbose:
         print(f"[DEBUG] Patch content ({len(patch_content)} chars):")
         print(patch_content[:500])
@@ -106,6 +117,12 @@ def apply_patch(file_path: str, patch_content: str, verbose: bool = False) -> bo
                     print(f"❌ Failed to apply patch with patch command")
                     if result.stderr:
                         print(f"Error: {result.stderr}")
+                    
+                    # Show the patch content for debugging
+                    print(f"\n⚠️  Patch content that failed to apply:")
+                    print("=" * 60)
+                    print(patch_content)
+                    print("=" * 60)
                     return False
         
         finally:

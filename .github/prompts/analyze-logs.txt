@@ -78,25 +78,48 @@ Please provide:
 
 4. **CRITICAL - GIT PATCH FOR THIS SPECIFIC ISSUE (REQUIRED):**
    - The "patch" field is **MANDATORY** for EVERY issue
-   - Generate a unified diff (git patch format) for ONLY THIS SPECIFIC ISSUE
-   - This allows multiple issues to be applied independently to the same file
-   - The patch must be in standard unified diff format that can be applied with 'git apply'
-   - Include enough context lines (at least 3) for robust matching
-   - Format example:
-     ```
-     --- a/path/to/file.py
-     +++ b/path/to/file.py
-     @@ -35,6 +35,9 @@ def createUser(email, name):
-          # ... existing code ...
-          user = db.users.create(email, name)
-     +    # Add logging
-     +    logger.info('user_created', extra={'user_id': user.id})
-     +
-          return user
-     ```
-   - **WITHOUT this field, the fix cannot be applied**
-   - Each patch should be MINIMAL - only change what's needed for THIS specific issue
-   - This allows users to apply fixes independently without conflicts
+   - Must be a valid unified diff that can be applied with `git apply`
+   - Include ONLY changes for THIS SPECIFIC ISSUE (minimal patch)
+   - Include at least 3 context lines before and after changes
+   - Use actual newlines (\n) in the patch string
+   
+   **EXACT FORMAT REQUIRED:**
+   ```
+   --- a/path/to/file.py
+   +++ b/path/to/file.py
+   @@ -startline,count +startline,count @@
+    context line (starts with space)
+    context line (starts with space)
+    context line (starts with space)
+   -line to remove (if any, starts with minus)
+   +line to add (starts with plus)
+   +another line to add (starts with plus)
+    context line (starts with space)
+    context line (starts with space)
+    context line (starts with space)
+   ```
+   
+   **CRITICAL RULES:**
+   - Each line MUST start with space (context), + (add), or - (remove)
+   - Line numbers in @@ header must be accurate
+   - Context lines must match file exactly (including whitespace)
+   - Patch must end with newline
+   - NO explanatory text, ONLY the patch
+   
+   **EXAMPLE for adding logging at line 35:**
+   ```
+   --- a/services/user.py
+   +++ b/services/user.py
+   @@ -32,8 +32,10 @@ def create_user(email, name):
+        """Create a new user."""
+        correlation_id = str(uuid.uuid4())
+        
+   +    logger.info('creating_user', extra={'email': email, 'correlation_id': correlation_id})
+        user = db.users.create(email=email, name=name)
+   +    logger.info('user_created', extra={'user_id': user.id, 'correlation_id': correlation_id})
+        
+        return user
+   ```
 
 5. Impact on debugging/monitoring if the log remains missing
 
