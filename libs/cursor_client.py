@@ -189,14 +189,40 @@ class CursorClient:
                 if isinstance(result_field, dict):
                     return result_field
                 
-                # Try to extract JSON from string
+                # Try to extract JSON from string (array or object)
                 if isinstance(result_field, str):
-                    match = re.search(r'\{.*\}', result_field, re.DOTALL)
-                    if match:
+                    # First, try to parse the entire string as JSON
+                    try:
+                        return json.loads(result_field.strip())
+                    except json.JSONDecodeError:
+                        pass
+                    
+                    # Try to extract JSON array
+                    array_match = re.search(r'\[.*\]', result_field, re.DOTALL)
+                    if array_match:
                         try:
-                            return json.loads(match.group(0))
-                        except:
+                            return json.loads(array_match.group(0))
+                        except json.JSONDecodeError:
                             pass
+                    
+                    # Try to extract JSON object
+                    obj_match = re.search(r'\{.*\}', result_field, re.DOTALL)
+                    if obj_match:
+                        try:
+                            return json.loads(obj_match.group(0))
+                        except json.JSONDecodeError:
+                            pass
+                    
+                    # If extraction fails, try to find first [ and last ]
+                    first_bracket = result_field.find('[')
+                    last_bracket = result_field.rfind(']')
+                    if first_bracket != -1 and last_bracket != -1 and last_bracket > first_bracket:
+                        try:
+                            json_str = result_field[first_bracket:last_bracket + 1]
+                            return json.loads(json_str)
+                        except json.JSONDecodeError:
+                            pass
+                    
                     # Return plain text if no JSON found
                     return result_field
             
