@@ -226,6 +226,7 @@ jobs:
       pr_number: ${{ github.event.pull_request.number }}
       repository: ${{ github.repository }}
       comment_body: ${{ github.event.comment.body }}
+      comment_id: ${{ github.event.comment.id }}
     secrets:
       git_token: ${{ secrets.GITHUB_TOKEN }}
       cursor_api_key: ${{ secrets.CURSOR_API_KEY }}
