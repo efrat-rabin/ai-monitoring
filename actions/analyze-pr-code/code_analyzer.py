@@ -142,8 +142,54 @@ class CursorAnalyzer:
                         return [{'file': file_paths[0] if file_paths else 'unknown', 'analysis': parsed}]
                 except json.JSONDecodeError:
                     if verbose:
-                        print(f"[DEBUG] String is not valid JSON")
-                    print(f"ERROR: AI returned non-JSON response. Please check the prompt.")
+                        print(f"[DEBUG] String is not valid JSON, extracting JSON from text")
+                    
+                    # Extract JSON array from text (AI often adds explanatory text despite instructions)
+                    import re
+                    # Find JSON array starting with [ and ending with ]
+                    json_match = re.search(r'\[\s*\{', result)
+                    if json_match:
+                        start_pos = json_match.start()
+                        # Extract from first [ to end
+                        json_str = result[start_pos:]
+                        
+                        # Try to parse the extracted JSON
+                        try:
+                            parsed = json.loads(json_str)
+                            if isinstance(parsed, list):
+                                if verbose:
+                                    print(f"[DEBUG] Extracted and parsed JSON array with {len(parsed)} items")
+                                return parsed
+                        except json.JSONDecodeError:
+                            # JSON might be truncated, try to find the closing ]
+                            if verbose:
+                                print(f"[DEBUG] Trying to find complete JSON array")
+                            
+                            # Count brackets to find matching ]
+                            bracket_count = 0
+                            end_pos = -1
+                            for i, char in enumerate(json_str):
+                                if char == '[':
+                                    bracket_count += 1
+                                elif char == ']':
+                                    bracket_count -= 1
+                                    if bracket_count == 0:
+                                        end_pos = i + 1
+                                        break
+                            
+                            if end_pos > 0:
+                                json_str = json_str[:end_pos]
+                                try:
+                                    parsed = json.loads(json_str)
+                                    if isinstance(parsed, list):
+                                        if verbose:
+                                            print(f"[DEBUG] Extracted complete JSON array with {len(parsed)} items")
+                                        return parsed
+                                except json.JSONDecodeError as e:
+                                    if verbose:
+                                        print(f"[DEBUG] Failed to parse extracted JSON: {e}")
+                    
+                    print(f"ERROR: Could not extract valid JSON from AI response")
                     print(f"Response preview: {result[:500]}")
                     return []
             else:
