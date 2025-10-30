@@ -125,15 +125,24 @@ Please provide:
 
 IMPORTANT: Limit your analysis to the TOP 5 MOST CRITICAL issues only per file. Focus on the most impactful missing logs.
 
-**CRITICAL OUTPUT FORMAT REQUIREMENTS:**
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  CRITICAL: OUTPUT FORMAT REQUIREMENTS - READ CAREFULLY ⚠️
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1. **RETURN ONLY JSON** - Your ENTIRE response must be ONLY the JSON array below
-2. **NO MARKDOWN** - Do not wrap JSON in ```json code blocks
-3. **NO EXPLANATORY TEXT** - Do not add analysis summaries, explanations, or commentary
-4. **START WITH [** - Your response must begin with [ and end with ]
-5. **EACH ISSUE MUST HAVE "patch"** - Every issue object must contain a valid git patch
+YOUR FIRST CHARACTER MUST BE: [
+YOUR LAST CHARACTER MUST BE: ]
 
-**IF YOU RETURN ANYTHING OTHER THAN THE JSON ARRAY BELOW, THE SYSTEM WILL FAIL**
+DO NOT write analysis summaries
+DO NOT write "Creating the JSON..."
+DO NOT write "Analyzing the files..."
+DO NOT write "Analysis complete..."
+DO NOT wrap in ```json or ``` code blocks
+DO NOT add ANY text before the [
+DO NOT add ANY text after the ]
+
+THE ENTIRE RESPONSE = JSON ARRAY ONLY
+
+VIOLATION OF THIS FORMAT WILL CAUSE SYSTEM FAILURE
 
 Return format:
 [
