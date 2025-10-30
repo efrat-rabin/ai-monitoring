@@ -58,12 +58,20 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout repository
+      - name: Checkout calling repository (code to modify)
         uses: actions/checkout@v4
         with:
+          repository: ${{ inputs.repository || github.repository }}
           ref: refs/pull/${{ inputs.pr_number }}/head
           fetch-depth: 0
-          token: ${{ inputs.git_token || secrets.git_token }}
+          token: ${{ inputs.git_token || secrets.git_token || github.token }}
+      
+      - name: Checkout workflow repository (scripts)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          path: .ai-monitoring
+          token: ${{ secrets.BOT_GITHUB_TOKEN || github.token }}
       
       - name: Configure Git
         run: |
@@ -78,18 +86,21 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f .ai-monitoring/requirements.txt ]; then pip install -r .ai-monitoring/requirements.txt; fi
       
       - name: Run apply suggested logs script
         id: apply-logs
         run: |
-          python actions/apply-suggested-logs/main.py \
+          # Add ai-monitoring libs to Python path
+          export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
+          
+          python .ai-monitoring/actions/apply-suggested-logs/main.py \
             --pr-number "${{ inputs.pr_number }}" \
             --repository "${{ inputs.repository }}" \
             --comment-body '${{ inputs.comment_body }}' \
             --comment-id "${{ inputs.comment_id }}"
         env:
-          GITHUB_TOKEN: ${{ inputs.git_token || secrets.git_token }}
+          GITHUB_TOKEN: ${{ inputs.git_token || secrets.git_token || github.token }}
           CURSOR_API_KEY: ${{ inputs.cursor_api_key || secrets.cursor_api_key }}
       
       - name: Commit and push changes
@@ -113,10 +124,10 @@ jobs:
       - name: Comment on PR
         if: steps.commit-changes.outputs.changes_applied == 'true'
         run: |
-          python actions/apply-suggested-logs/post_apply_comment.py \
+          python .ai-monitoring/actions/apply-suggested-logs/post_apply_comment.py \
             --pr-number "${{ inputs.pr_number }}" \
             --repository "${{ inputs.repository }}" \
             --comment-id "${{ inputs.comment_id }}"
         env:
-          GITHUB_TOKEN: ${{ inputs.git_token || secrets.git_token }}
+          GITHUB_TOKEN: ${{ inputs.git_token || secrets.git_token || github.token }}
 
