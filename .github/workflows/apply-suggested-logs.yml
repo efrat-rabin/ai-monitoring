@@ -23,10 +23,6 @@ on:
         description: 'GitHub Token'
         required: true
         type: string
-      cursor_api_key:
-        description: 'Cursor API Key'
-        required: true
-        type: string
   workflow_call:
     inputs:
       pr_number:
@@ -49,9 +45,6 @@ on:
       git_token:
         description: 'GitHub Token'
         required: false
-      cursor_api_key:
-        description: 'Cursor API Key'
-        required: true
 
 jobs:
   apply-logs:
@@ -90,7 +83,6 @@ jobs:
             --comment-id "${{ inputs.comment_id }}"
         env:
           GITHUB_TOKEN: ${{ inputs.git_token || secrets.git_token }}
-          CURSOR_API_KEY: ${{ inputs.cursor_api_key || secrets.cursor_api_key }}
       
       - name: Commit and push changes
         id: commit-changes

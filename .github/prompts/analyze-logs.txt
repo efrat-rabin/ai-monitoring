@@ -69,18 +69,81 @@ Please provide:
 2. Specific line numbers or method names where logs are missing
 
 3. PURE CODE recommendation:
-   - The "recommendation" field MUST contain ONLY executable code
+   - The "recommendation" field MUST contain ONLY executable code snippets to show in PR comments
    - NO explanatory text like "Add this:", "You should:", etc.
    - NO descriptions or comments about what to do
    - ONLY the exact code statement(s) to add
    - Example GOOD: logger.error('user_deletion_failed', { userId, error: error.message });
    - Example BAD: Add error logging before re-throwing: logger.error(...)
 
-4. Impact on debugging/monitoring if the log remains missing
+4. **CRITICAL - GIT PATCH FOR THIS SPECIFIC ISSUE (REQUIRED):**
+   - The "patch" field is **MANDATORY** for EVERY issue
+   - Must be a valid unified diff that can be applied with `git apply`
+   - Include ONLY changes for THIS SPECIFIC ISSUE (minimal patch)
+   - Include at least 3 context lines before and after changes
+   - Use actual newlines (\n) in the patch string
+   
+   **EXACT FORMAT REQUIRED:**
+   ```
+   --- a/path/to/file.py
+   +++ b/path/to/file.py
+   @@ -startline,count +startline,count @@
+    context line (starts with space)
+    context line (starts with space)
+    context line (starts with space)
+   -line to remove (if any, starts with minus)
+   +line to add (starts with plus)
+   +another line to add (starts with plus)
+    context line (starts with space)
+    context line (starts with space)
+    context line (starts with space)
+   ```
+   
+   **CRITICAL RULES:**
+   - Each line MUST start with space (context), + (add), or - (remove)
+   - Line numbers in @@ header must be accurate
+   - Context lines must match file exactly (including whitespace)
+   - Patch must end with newline
+   - NO explanatory text, ONLY the patch
+   
+   **EXAMPLE for adding logging at line 35:**
+   ```
+   --- a/services/user.py
+   +++ b/services/user.py
+   @@ -32,8 +32,10 @@ def create_user(email, name):
+        """Create a new user."""
+        correlation_id = str(uuid.uuid4())
+        
+   +    logger.info('creating_user', extra={'email': email, 'correlation_id': correlation_id})
+        user = db.users.create(email=email, name=name)
+   +    logger.info('user_created', extra={'user_id': user.id, 'correlation_id': correlation_id})
+        
+        return user
+   ```
+
+5. Impact on debugging/monitoring if the log remains missing
 
 IMPORTANT: Limit your analysis to the TOP 5 MOST CRITICAL issues only per file. Focus on the most impactful missing logs.
 
-IMPORTANT: Return results as a JSON array with one entry per file. NO markdown, NO explanatory text, NO code blocks.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  CRITICAL: OUTPUT FORMAT REQUIREMENTS - READ CAREFULLY ⚠️
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+YOUR FIRST CHARACTER MUST BE: [
+YOUR LAST CHARACTER MUST BE: ]
+
+DO NOT write analysis summaries
+DO NOT write "Creating the JSON..."
+DO NOT write "Analyzing the files..."
+DO NOT write "Analysis complete..."
+DO NOT wrap in ```json or ``` code blocks
+DO NOT add ANY text before the [
+DO NOT add ANY text after the ]
+
+THE ENTIRE RESPONSE = JSON ARRAY ONLY
+
+VIOLATION OF THIS FORMAT WILL CAUSE SYSTEM FAILURE
+
 Return format:
 [
   {
@@ -93,7 +156,8 @@ Return format:
           "line": <line_number>,
           "method": "method or function name where log is missing",
           "description": "What log statement is missing and why it's needed",
-          "recommendation": "PURE CODE ONLY - the exact code to add (no explanatory text, no 'Add this', no descriptions, just the raw code)",
+          "recommendation": "PURE CODE ONLY - code snippet for PR display",
+          "patch": "**REQUIRED** - Unified diff (git patch format) for THIS specific issue only. Must include context lines for robust matching.",
           "impact": "Impact on debugging/monitoring/compliance if not added"
         }
       ],
@@ -105,6 +169,31 @@ Return format:
     "analysis": {
       "issues": [],
       "summary": "Code looks good - no issues detected"
+    }
+  }
+]
+
+**FINAL REMINDERS:**
+- Your ENTIRE response = the JSON array, nothing else
+- NO explanatory text before or after the JSON
+- NO markdown code blocks around the JSON
+- Start your response with [ (opening bracket)
+- End your response with ] (closing bracket)
+- Each issue MUST have "patch" field with valid unified diff
+- Patches must be MINIMAL and INDEPENDENT
+
+**EXAMPLE VALID RESPONSE START:**
+[
+  {
+    "file": "actions/example.py",
+    "analysis": {
+      "issues": [
+        {
+          "severity": "CRITICAL",
+          ...
+          "patch": "--- a/actions/example.py\n+++ b/actions/example.py\n..."
+        }
+      ]
     }
   }
 ]

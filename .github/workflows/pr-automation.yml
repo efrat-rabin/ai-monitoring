@@ -29,7 +29,7 @@ jobs:
       pr_number: ${{ github.event.pull_request.number }}
       repository: ${{ github.repository }}
       post_comment: true
-      test_mode: true
+      test_mode: false
     secrets:
       cursor_api_key: ${{ secrets.CURSOR_API_KEY }}
   
@@ -101,7 +101,6 @@ jobs:
             --comment-id "${{ github.event.comment.id }}"
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           COMMENT_BODY: ${{ steps.get-parent.outputs.parent_body }}
       
       - name: Commit and push changes

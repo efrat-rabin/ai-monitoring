@@ -20,6 +20,7 @@ def format_review_comment(issue: Dict[str, Any], file_path: str) -> str:
     line = issue.get("line", "N/A")
     
     # Include metadata as hidden JSON for parsing
+    # IMPORTANT: patch contains the git diff that will be applied for this specific issue
     metadata = {
         "file": file_path,
         "severity": severity,
@@ -28,6 +29,7 @@ def format_review_comment(issue: Dict[str, Any], file_path: str) -> str:
         "line": line,
         "description": issue.get("description", ""),
         "recommendation": issue.get("recommendation", ""),
+        "patch": issue.get("patch", ""),
         "impact": issue.get("impact", "")
     }
     
