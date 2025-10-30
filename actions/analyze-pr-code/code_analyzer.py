@@ -143,15 +143,9 @@ class CursorAnalyzer:
                 except json.JSONDecodeError:
                     if verbose:
                         print(f"[DEBUG] String is not valid JSON")
-                    pass
-                
-                # Return raw text as analysis
-                if verbose:
-                    print(f"[DEBUG] Wrapping string as analysis response")
-                return [{
-                    'file': file_paths[0] if file_paths else 'unknown',
-                    'analysis': {'response': result}
-                }]
+                    print(f"ERROR: AI returned non-JSON response. Please check the prompt.")
+                    print(f"Response preview: {result[:500]}")
+                    return []
             else:
                 print(f"ERROR: Unexpected result format: {type(result)}")
                 print(f"Result preview: {str(result)[:500]}")
