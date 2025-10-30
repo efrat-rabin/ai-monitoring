@@ -15,14 +15,62 @@ on:
         description: 'GitHub Token'
         required: true
         type: string
+      log_line:
+        description: 'Log line JSON to analyze'
+        required: false
+        type: string
+      anthropic_api_key:
+        description: 'Anthropic API Key'
+        required: false
+        type: string
+      groundcover_api_key:
+        description: 'Groundcover API Key'
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      pr_number:
+        description: 'Pull Request Number'
+        required: false
+        type: string
+      repository:
+        description: 'Repository (owner/repo)'
+        required: false
+        type: string
+      log_line:
+        description: 'Log line JSON to analyze'
+        required: false
+        type: string
+    secrets:
+      git_token:
+        description: 'GitHub Token'
+        required: false
+      anthropic_api_key:
+        description: 'Anthropic API Key'
+        required: true
+      groundcover_api_key:
+        description: 'Groundcover API Key'
+        required: true
 
 jobs:
   apply-gc-resources:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout repository
+      - name: Checkout calling repository (code to analyze)
         uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+          fetch-depth: 0
+          token: ${{ inputs.git_token || secrets.git_token || github.token }}
+      
+      - name: Checkout workflow repository (scripts)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          path: .ai-monitoring
+          token: ${{ secrets.BOT_GITHUB_TOKEN || github.token }}
       
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -32,12 +80,23 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f .ai-monitoring/requirements.txt ]; then pip install -r .ai-monitoring/requirements.txt; fi
       
       - name: Run apply suggested GC resources script
-        run: python actions/apply-suggested-gc-resources/main.py
+        run: |
+          # Add ai-monitoring libs to Python path
+          export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
+          
+          if [ -n "${{ inputs.log_line }}" ]; then
+            python .ai-monitoring/actions/apply-suggested-gc-resources/main.py \
+              --log-line '${{ inputs.log_line }}'
+          else
+            python .ai-monitoring/actions/apply-suggested-gc-resources/main.py
+          fi
         env:
-          GITHUB_TOKEN: ${{ inputs.git_token }}
+          GITHUB_TOKEN: ${{ inputs.git_token || secrets.git_token || github.token }}
           PR_NUMBER: ${{ inputs.pr_number }}
           REPOSITORY: ${{ inputs.repository }}
+          ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key || secrets.anthropic_api_key }}
+          GROUNDCOVER_API_KEY: ${{ inputs.groundcover_api_key || secrets.groundcover_api_key }}
 
