@@ -8,6 +8,14 @@ import json
 import requests
 
 
+def _set_github_output(key: str, value: str):
+    """Set GitHub Actions output variable."""
+    github_output = os.getenv('GITHUB_OUTPUT')
+    if github_output:
+        with open(github_output, 'a') as f:
+            f.write(f"{key}={value}\n")
+
+
 def get_comment_by_id(github_token: str, repository: str, pr_number: int, comment_id: int, verbose: bool = False):
     """Get a specific review comment by ID."""
     owner, repo = repository.split("/")
@@ -63,6 +71,7 @@ def main():
     github_token = os.getenv("GITHUB_TOKEN")
     if not github_token:
         print("ERROR: GITHUB_TOKEN not set")
+        _set_github_output("should_apply", "false")
         return 1
     
     # Get the parent comment directly by ID
@@ -75,6 +84,7 @@ def main():
         if verbose:
             import traceback
             traceback.print_exc()
+        _set_github_output("should_apply", "false")
         return 1
     
     # Write result
@@ -93,6 +103,14 @@ def main():
     
     with open(args.output_file, 'w') as f:
         json.dump(result, f, indent=2)
+    
+    # Set GitHub Actions outputs
+    _set_github_output("should_apply", "true")
+    _set_github_output("comment_id", str(result['comment_id']))
+    _set_github_output("parent_comment_id", str(result['parent_comment_id']))
+    
+    if verbose:
+        print(f"[DEBUG] Set GitHub Actions outputs: should_apply=true")
     
     print(f"✓ Got parent comment #{result['parent_comment_id']}")
     print(f"  Triggered by comment #{result['comment_id']} from {result['comment_author']}")
