@@ -80,7 +80,23 @@ Please provide:
 
 IMPORTANT: Limit your analysis to the TOP 5 MOST CRITICAL issues only per file. Focus on the most impactful missing logs.
 
-IMPORTANT: Return results as a JSON array with one entry per file. NO markdown, NO explanatory text, NO code blocks.
+=== CRITICAL OUTPUT FORMAT REQUIREMENTS ===
+
+YOU MUST RETURN ONLY PURE JSON. NO OTHER TEXT ALLOWED.
+
+DO NOT include:
+- ❌ NO explanatory text before the JSON
+- ❌ NO markdown code blocks (```json)
+- ❌ NO comments or descriptions
+- ❌ NO "Here's the analysis:" or similar phrases
+- ❌ NO "Analyzing..." or status messages
+- ❌ NO newlines before the JSON starts
+
+START YOUR RESPONSE WITH THE OPENING BRACKET [ 
+END YOUR RESPONSE WITH THE CLOSING BRACKET ]
+
+ONLY PURE JSON ARRAY. NOTHING ELSE.
+
 Return format:
 [
   {
@@ -108,4 +124,11 @@ Return format:
     }
   }
 ]
+
+=== REMINDER: RETURN ONLY THE JSON ARRAY ABOVE ===
+Your entire response must be ONLY the JSON array starting with [ and ending with ].
+Do not write any text before or after the JSON.
+Do not explain your analysis.
+Do not use markdown formatting.
+JUST THE JSON.
 
