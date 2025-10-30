@@ -84,6 +84,7 @@ jobs:
           python .ai-monitoring/actions/analyze-pr-code/post_comment.py \
             --pr-number ${{ steps.pr_info.outputs.pr_number }} \
             --repository ${{ steps.pr_info.outputs.repository }} \
+            --commit-sha ${{ github.event.pull_request.head.sha }} \
             --results-file analysis-results.json
 
   # Apply fixes when developer comments /apply-logs
