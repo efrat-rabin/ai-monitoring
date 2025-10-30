@@ -125,16 +125,47 @@ jobs:
           cd .ai-monitoring
           pip install -r requirements.txt
       
+      - name: Debug GitHub event context
+        run: |
+          echo "Event name: ${{ github.event_name }}"
+          echo "Comment ID: ${{ github.event.comment.id }}"
+          echo "Comment in_reply_to_id: ${{ github.event.comment.in_reply_to_id }}"
+          echo "Comment body: ${{ github.event.comment.body }}"
+      
       - name: Check if apply should be triggered
         id: check_apply
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
+          
+          # Get comment IDs from event context
+          COMMENT_ID="${{ github.event.comment.id }}"
+          IN_REPLY_TO_ID="${{ github.event.comment.in_reply_to_id }}"
+          
+          # Debug output
+          echo "Comment ID from event: '$COMMENT_ID'"
+          echo "In-reply-to ID from event: '$IN_REPLY_TO_ID'"
+          
+          # Validate we have comment_id
+          if [ -z "$COMMENT_ID" ]; then
+            echo "ERROR: comment.id is not available in the event context"
+            echo "This might happen if the workflow is not triggered by pull_request_review_comment event"
+            echo "should_apply=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # If no in_reply_to_id, use comment_id itself
+          if [ -z "$IN_REPLY_TO_ID" ]; then
+            echo "No in_reply_to_id found, using comment_id as fallback"
+            IN_REPLY_TO_ID="$COMMENT_ID"
+          fi
+          
           python .ai-monitoring/actions/apply-suggested-logs/check_apply_trigger.py \
             --pr-number ${{ steps.pr_info.outputs.pr_number }} \
             --repository ${{ steps.pr_info.outputs.repository }} \
-            --comment-body "${{ github.event.comment.body }}"
+            --comment-id "$COMMENT_ID" \
+            --in-reply-to-id "$IN_REPLY_TO_ID"
       
       - name: Apply suggested changes
         if: steps.check_apply.outputs.should_apply == 'true'
