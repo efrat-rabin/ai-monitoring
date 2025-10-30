@@ -69,14 +69,21 @@ Please provide:
 2. Specific line numbers or method names where logs are missing
 
 3. PURE CODE recommendation:
-   - The "recommendation" field MUST contain ONLY executable code
+   - The "recommendation" field MUST contain ONLY executable code snippets to show in PR comments
    - NO explanatory text like "Add this:", "You should:", etc.
    - NO descriptions or comments about what to do
    - ONLY the exact code statement(s) to add
    - Example GOOD: logger.error('user_deletion_failed', { userId, error: error.message });
    - Example BAD: Add error logging before re-throwing: logger.error(...)
 
-4. Impact on debugging/monitoring if the log remains missing
+4. Complete fixed file content:
+   - The "fixed_content" field MUST contain the COMPLETE file with the logging improvements applied
+   - This is the exact code that will be committed when the user accepts the change
+   - Include ALL imports, ALL existing code, with ONLY the logging changes added
+   - Maintain exact indentation, formatting, and structure of the original file
+   - This ensures what the user sees in the PR comment matches what gets committed
+
+5. Impact on debugging/monitoring if the log remains missing
 
 IMPORTANT: Limit your analysis to the TOP 5 MOST CRITICAL issues only per file. Focus on the most impactful missing logs.
 
@@ -93,7 +100,8 @@ Return format:
           "line": <line_number>,
           "method": "method or function name where log is missing",
           "description": "What log statement is missing and why it's needed",
-          "recommendation": "PURE CODE ONLY - the exact code to add (no explanatory text, no 'Add this', no descriptions, just the raw code)",
+          "recommendation": "PURE CODE ONLY - the exact code snippet to show in PR comment (no explanatory text, no 'Add this', no descriptions, just the raw code)",
+          "fixed_content": "COMPLETE file content with ALL logging improvements applied - this exact code will be committed when user accepts",
           "impact": "Impact on debugging/monitoring/compliance if not added"
         }
       ],
