@@ -125,9 +125,15 @@ Please provide:
 
 IMPORTANT: Limit your analysis to the TOP 5 MOST CRITICAL issues only per file. Focus on the most impactful missing logs.
 
-IMPORTANT: Return results as a JSON array with one entry per file. NO markdown, NO explanatory text, NO code blocks outside JSON.
+**CRITICAL OUTPUT FORMAT REQUIREMENTS:**
 
-**CRITICAL REQUIREMENT:** Each issue MUST include the "patch" field with a unified diff for ONLY that specific issue.
+1. **RETURN ONLY JSON** - Your ENTIRE response must be ONLY the JSON array below
+2. **NO MARKDOWN** - Do not wrap JSON in ```json code blocks
+3. **NO EXPLANATORY TEXT** - Do not add analysis summaries, explanations, or commentary
+4. **START WITH [** - Your response must begin with [ and end with ]
+5. **EACH ISSUE MUST HAVE "patch"** - Every issue object must contain a valid git patch
+
+**IF YOU RETURN ANYTHING OTHER THAN THE JSON ARRAY BELOW, THE SYSTEM WILL FAIL**
 
 Return format:
 [
@@ -158,6 +164,28 @@ Return format:
   }
 ]
 
-**REMINDER:** Every issue object MUST have "patch" with a unified diff, or the fix cannot be applied!
-**IMPORTANT:** Each patch should be MINIMAL and INDEPENDENT - only change lines needed for that specific issue!
+**FINAL REMINDERS:**
+- Your ENTIRE response = the JSON array, nothing else
+- NO explanatory text before or after the JSON
+- NO markdown code blocks around the JSON
+- Start your response with [ (opening bracket)
+- End your response with ] (closing bracket)
+- Each issue MUST have "patch" field with valid unified diff
+- Patches must be MINIMAL and INDEPENDENT
+
+**EXAMPLE VALID RESPONSE START:**
+[
+  {
+    "file": "actions/example.py",
+    "analysis": {
+      "issues": [
+        {
+          "severity": "CRITICAL",
+          ...
+          "patch": "--- a/actions/example.py\n+++ b/actions/example.py\n..."
+        }
+      ]
+    }
+  }
+]
 
