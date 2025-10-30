@@ -167,12 +167,17 @@ class CursorAnalyzer:
         """Generate mock analysis results for testing."""
         results = []
         for file_path in file_paths:
-            # Read actual file content for mock fixed_content
-            try:
-                with open(file_path, 'r') as f:
-                    original_content = f.read()
-            except:
-                original_content = "# File content not available"
+            # Generate a mock patch for testing
+            mock_patch = f"""--- a/{file_path}
++++ b/{file_path}
+@@ -92,6 +92,9 @@ class CursorClient:
+         # ... existing code ...
+         result = subprocess.run(...)
++        # Add logging
++        logger.info('cursor_agent_call', extra={{'duration_ms': duration}})
++
+         return result
+"""
             
             results.append({
                 "file": file_path,
@@ -185,7 +190,7 @@ class CursorAnalyzer:
                             "method": "send_message",
                             "description": "The core method that performs external API calls to cursor-agent lacks any logging. No entry logs with request details, no success logs, no timing metrics, and errors are raised without being logged first. This makes it impossible to troubleshoot API call failures, track request volume, or monitor performance.",
                             "recommendation": "logger.info('sending_cursor_message', extra={'prompt_length': len(prompt), 'has_context': bool(context), 'correlation_id': correlation_id});\nstart_time = time.time();\n# ... existing code ...\nlogger.info('cursor_message_success', extra={'duration_ms': (time.time() - start_time) * 1000, 'response_size': len(str(result))});\n# On error:\nlogger.error('cursor_message_failed', extra={'error': str(e), 'stderr': result.stderr}, exc_info=True)",
-                            "fixed_content": original_content + "\n# [MOCK] Logging improvements applied",
+                            "patch": mock_patch,
                             "impact": "Without logs in send_message, production issues with Cursor API calls cannot be diagnosed. Cannot determine request rates, latency patterns, failure modes, or correlate errors with specific requests. Violates observability best practices for external API integrations."
                         },
                         {
@@ -195,7 +200,7 @@ class CursorAnalyzer:
                             "method": "install_cursor_cli",
                             "description": "Generic exception handler catches all exceptions and returns False without logging. Installation failures are completely silent, making it impossible to debug why installation attempts fail in production.",
                             "recommendation": "except Exception as e:\n    logger.error('cursor_cli_install_failed', extra={'error': str(e), 'error_type': type(e).__name__}, exc_info=True)\n    return False",
-                            "fixed_content": original_content + "\n# [MOCK] Logging improvements applied",
+                            "patch": mock_patch,
                             "impact": "Installation failures in production environments cannot be diagnosed. Security issues, permission problems, network failures, or binary corruption go undetected. No audit trail for installation attempts."
                         },
                         {
@@ -205,7 +210,7 @@ class CursorAnalyzer:
                             "method": "send_message",
                             "description": "External API call to cursor-agent subprocess lacks performance timing. No duration metrics collected, no SLA/SLO monitoring possible, cannot identify slow requests or timeout patterns.",
                             "recommendation": "import time\nstart_time = time.time()\nresult = subprocess.run(...)\nduration_ms = (time.time() - start_time) * 1000\nlogger.info('cursor_agent_call_completed', extra={'duration_ms': duration_ms, 'returncode': result.returncode})\nif duration_ms > 5000:\n    logger.warning('cursor_agent_slow_request', extra={'duration_ms': duration_ms})",
-                            "fixed_content": original_content + "\n# [MOCK] Logging improvements applied",
+                            "patch": mock_patch,
                             "impact": "Cannot monitor API latency, detect performance degradation, or alert on slow requests. Cannot establish SLAs or track performance over time. Debugging slow requests is impossible without timing data."
                         },
                         {
@@ -215,7 +220,7 @@ class CursorAnalyzer:
                             "method": "send_message",
                             "description": "Exception handlers raise errors without logging them first. Timeout, FileNotFoundError, and generic exceptions are raised but not logged, making error tracking and alerting impossible. Errors lack context like prompt length, correlation IDs, and request metadata.",
                             "recommendation": "except subprocess.TimeoutExpired as e:\n    logger.error('cursor_agent_timeout', extra={'timeout_seconds': 300, 'prompt_length': len(prompt)}, exc_info=True)\n    raise\nexcept FileNotFoundError as e:\n    logger.error('cursor_agent_not_found', extra={'search_paths': search_paths}, exc_info=True)\n    raise\nexcept Exception as e:\n    logger.error('cursor_agent_error', extra={'error': str(e), 'error_type': type(e).__name__, 'prompt_length': len(prompt)}, exc_info=True)\n    raise",
-                            "fixed_content": original_content + "\n# [MOCK] Logging improvements applied",
+                            "patch": mock_patch,
                             "impact": "Errors cannot be tracked, monitored, or alerted on. Error rates are unknown. Cannot correlate errors with specific requests or identify patterns. Troubleshooting production incidents requires code changes instead of log analysis."
                         },
                         {
@@ -225,7 +230,7 @@ class CursorAnalyzer:
                             "method": "_parse_output",
                             "description": "Silent exception catch at line 164 when JSON parsing fails - exception is caught but not logged. Additionally, JSONDecodeError at line 171 is caught but not logged, making it impossible to debug parsing failures or track malformed response patterns.",
                             "recommendation": "except json.JSONDecodeError as e:\n    logger.warning('cursor_response_parse_failed', extra={'raw_output_preview': raw_output[:200], 'error': str(e)}, exc_info=True)\n    return raw_output\n# At line 164:\nexcept Exception as e:\n    logger.warning('json_extraction_failed', extra={'error': str(e), 'result_field': str(result_field)[:200]}, exc_info=True)\n    pass",
-                            "fixed_content": original_content + "\n# [MOCK] Logging improvements applied",
+                            "patch": mock_patch,
                             "impact": "Parsing failures go undetected, making it impossible to identify when Cursor API response format changes or becomes malformed. Cannot track parse error rates or alert on parsing issues."
                         }
                     ],

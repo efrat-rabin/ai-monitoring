@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Apply Suggested Logs Action
+Apply Suggested Logs Action - Using Git Patch Format
 """
 
 import os
@@ -8,11 +8,13 @@ import sys
 import argparse
 import json
 import re
+import subprocess
+import tempfile
 from pathlib import Path
 from typing import Dict, Any, Optional
 
 def parse_issue_from_comment(comment_body: str) -> Optional[Dict[str, Any]]:
-    """Parse issue details from a comment body, including the fixed_content to apply."""
+    """Parse issue details from a comment body, including the patch to apply."""
     # Try to extract from hidden JSON metadata
     json_match = re.search(r'<!-- ISSUE_DATA: (.+?) -->', comment_body, re.DOTALL)
     
@@ -30,7 +32,7 @@ def parse_issue_from_comment(comment_body: str) -> Optional[Dict[str, Any]]:
             'line': metadata.get('line', 0),
             'description': metadata.get('description', ''),
             'recommendation': metadata.get('recommendation', ''),
-            'fixed_content': metadata.get('fixed_content', ''),
+            'patch': metadata.get('patch', ''),
             'impact': metadata.get('impact', '')
         }
     except (json.JSONDecodeError, KeyError) as e:
@@ -38,43 +40,86 @@ def parse_issue_from_comment(comment_body: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def apply_fixed_content(file_path: str, fixed_content: str, verbose: bool = False) -> bool:
-    """Apply the fixed content directly to the file without calling AI."""
-    print(f"Applying improvements to: {file_path}")
+def apply_patch(file_path: str, patch_content: str, verbose: bool = False) -> bool:
+    """Apply a git patch to the specified file."""
+    print(f"Applying patch to: {file_path}")
     
     if not os.path.exists(file_path):
         print(f"❌ File not found: {file_path}")
         return False
     
-    if not fixed_content:
-        print(f"❌ No fixed_content provided - cannot apply changes")
+    if not patch_content:
+        print(f"❌ No patch provided - cannot apply changes")
         return False
-    
-    # Read current file content for comparison
-    with open(file_path, 'r') as f:
-        original_content = f.read()
     
     if verbose:
-        print(f"[DEBUG] Original file size: {len(original_content)} chars")
-        print(f"[DEBUG] Fixed content size: {len(fixed_content)} chars")
+        print(f"[DEBUG] Patch content ({len(patch_content)} chars):")
+        print(patch_content[:500])
+        if len(patch_content) > 500:
+            print("... (truncated)")
     
-    # Check if content is actually different
-    if fixed_content == original_content:
-        print(f"ℹ️  No changes needed for {file_path} (content is identical)")
-        return False
-    
-    # Write the fixed content directly to the file
+    # Write patch to temporary file
     try:
-        with open(file_path, 'w') as f:
-            f.write(fixed_content)
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.patch', delete=False) as f:
+            patch_file = f.name
+            f.write(patch_content)
         
-        print(f"✅ Applied changes to {file_path}")
         if verbose:
-            print(f"[DEBUG] Successfully wrote {len(fixed_content)} chars to {file_path}")
-        return True
+            print(f"[DEBUG] Wrote patch to temp file: {patch_file}")
         
+        # Try to apply the patch using git apply
+        try:
+            result = subprocess.run(
+                ['git', 'apply', '--verbose', patch_file],
+                capture_output=True,
+                text=True,
+                check=False
+            )
+            
+            if result.returncode == 0:
+                print(f"✅ Successfully applied patch to {file_path}")
+                if verbose and result.stdout:
+                    print(f"[DEBUG] git apply output: {result.stdout}")
+                return True
+            else:
+                print(f"❌ Failed to apply patch with git apply")
+                if result.stderr:
+                    print(f"Error: {result.stderr}")
+                
+                # Try with patch command as fallback
+                if verbose:
+                    print(f"[DEBUG] Trying fallback with patch command...")
+                
+                result = subprocess.run(
+                    ['patch', '-p1', '-i', patch_file],
+                    capture_output=True,
+                    text=True,
+                    check=False
+                )
+                
+                if result.returncode == 0:
+                    print(f"✅ Successfully applied patch to {file_path} (using patch command)")
+                    if verbose and result.stdout:
+                        print(f"[DEBUG] patch output: {result.stdout}")
+                    return True
+                else:
+                    print(f"❌ Failed to apply patch with patch command")
+                    if result.stderr:
+                        print(f"Error: {result.stderr}")
+                    return False
+        
+        finally:
+            # Clean up temp file
+            if os.path.exists(patch_file):
+                os.unlink(patch_file)
+                if verbose:
+                    print(f"[DEBUG] Cleaned up temp patch file")
+    
     except Exception as e:
-        print(f"❌ Failed to write file {file_path}: {e}")
+        print(f"❌ Exception while applying patch: {e}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
         return False
 
 
@@ -126,32 +171,32 @@ def main():
     
     if verbose:
         print(f"[DEBUG] Parsed issue for file: {issue.get('file')}")
-        print(f"[DEBUG] Has fixed_content: {bool(issue.get('fixed_content'))}")
-        if issue.get('fixed_content'):
-            print(f"[DEBUG] Fixed content size: {len(issue['fixed_content'])} chars")
+        print(f"[DEBUG] Has patch: {bool(issue.get('patch'))}")
+        if issue.get('patch'):
+            print(f"[DEBUG] Patch size: {len(issue['patch'])} chars")
     
     file_path = issue.get('file')
-    fixed_content = issue.get('fixed_content')
+    patch = issue.get('patch')
     
     if not file_path:
         print("ERROR: No file path found in issue metadata")
         return 1
     
-    if not fixed_content:
-        print("ERROR: No fixed_content found in issue metadata")
+    if not patch:
+        print("ERROR: No patch found in issue metadata")
         print("The PR comment may have been created with an older version of the analyzer.")
-        print("Please re-run the analysis to generate updated comments with fixed_content.")
+        print("Please re-run the analysis to generate updated comments with patch data.")
         return 1
     
-    print(f"Applying changes to {file_path}")
+    print(f"Applying patch to {file_path}")
     
-    if apply_fixed_content(file_path, fixed_content, verbose=verbose):
-        print(f"\n✅ Successfully applied changes to {file_path}")
+    if apply_patch(file_path, patch, verbose=verbose):
+        print(f"\n✅ Successfully applied patch to {file_path}")
         if verbose:
             print(f"[DEBUG] Successfully completed apply-suggested-logs/main.py")
         return 0
     else:
-        print(f"\n❌ Failed to apply changes")
+        print(f"\n❌ Failed to apply patch")
         return 1
 
 

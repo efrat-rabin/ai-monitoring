@@ -76,18 +76,36 @@ Please provide:
    - Example GOOD: logger.error('user_deletion_failed', { userId, error: error.message });
    - Example BAD: Add error logging before re-throwing: logger.error(...)
 
-4. Complete fixed file content:
-   - The "fixed_content" field MUST contain the COMPLETE file with the logging improvements applied
-   - This is the exact code that will be committed when the user accepts the change
-   - Include ALL imports, ALL existing code, with ONLY the logging changes added
-   - Maintain exact indentation, formatting, and structure of the original file
-   - This ensures what the user sees in the PR comment matches what gets committed
+4. **CRITICAL - GIT PATCH FOR THIS SPECIFIC ISSUE (REQUIRED):**
+   - The "patch" field is **MANDATORY** for EVERY issue
+   - Generate a unified diff (git patch format) for ONLY THIS SPECIFIC ISSUE
+   - This allows multiple issues to be applied independently to the same file
+   - The patch must be in standard unified diff format that can be applied with 'git apply'
+   - Include enough context lines (at least 3) for robust matching
+   - Format example:
+     ```
+     --- a/path/to/file.py
+     +++ b/path/to/file.py
+     @@ -35,6 +35,9 @@ def createUser(email, name):
+          # ... existing code ...
+          user = db.users.create(email, name)
+     +    # Add logging
+     +    logger.info('user_created', extra={'user_id': user.id})
+     +
+          return user
+     ```
+   - **WITHOUT this field, the fix cannot be applied**
+   - Each patch should be MINIMAL - only change what's needed for THIS specific issue
+   - This allows users to apply fixes independently without conflicts
 
 5. Impact on debugging/monitoring if the log remains missing
 
 IMPORTANT: Limit your analysis to the TOP 5 MOST CRITICAL issues only per file. Focus on the most impactful missing logs.
 
-IMPORTANT: Return results as a JSON array with one entry per file. NO markdown, NO explanatory text, NO code blocks.
+IMPORTANT: Return results as a JSON array with one entry per file. NO markdown, NO explanatory text, NO code blocks outside JSON.
+
+**CRITICAL REQUIREMENT:** Each issue MUST include the "patch" field with a unified diff for ONLY that specific issue.
+
 Return format:
 [
   {
@@ -100,8 +118,8 @@ Return format:
           "line": <line_number>,
           "method": "method or function name where log is missing",
           "description": "What log statement is missing and why it's needed",
-          "recommendation": "PURE CODE ONLY - the exact code snippet to show in PR comment (no explanatory text, no 'Add this', no descriptions, just the raw code)",
-          "fixed_content": "COMPLETE file content with ALL logging improvements applied - this exact code will be committed when user accepts",
+          "recommendation": "PURE CODE ONLY - code snippet for PR display",
+          "patch": "**REQUIRED** - Unified diff (git patch format) for THIS specific issue only. Must include context lines for robust matching.",
           "impact": "Impact on debugging/monitoring/compliance if not added"
         }
       ],
@@ -116,4 +134,7 @@ Return format:
     }
   }
 ]
+
+**REMINDER:** Every issue object MUST have "patch" with a unified diff, or the fix cannot be applied!
+**IMPORTANT:** Each patch should be MINIMAL and INDEPENDENT - only change lines needed for that specific issue!
 
