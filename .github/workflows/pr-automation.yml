@@ -1,172 +1,172 @@
 name: PR Automation
 
-# Complete PR automation: analyze code and apply fixes on command
-# Can be used as a reusable workflow from external repositories
-
 on:
-  pull_request:
-    types: [opened, synchronize]
-  pull_request_review_comment:
-    types: [created]
-  workflow_dispatch:
-    inputs:
-      pr_number:
-        description: 'Pull Request Number'
-        required: false
-        type: string
-      repository:
-        description: 'Repository (owner/repo)'
-        required: false
-        type: string
   workflow_call:
     inputs:
       pr_number:
-        description: 'Pull Request Number'
-        required: false
+        description: 'PR number (auto-detected if not provided)'
         type: string
+        required: false
       repository:
-        description: 'Repository (owner/repo)'
-        required: false
+        description: 'Repository name (auto-detected if not provided)'
         type: string
+        required: false
+      test_mode:
+        description: 'Run in test mode (uses mock data)'
+        type: boolean
+        required: false
+        default: false
     secrets:
       cursor_api_key:
-        description: 'Cursor API Key'
+        description: 'Cursor API key for AI analysis'
         required: true
       git_token:
-        description: 'GitHub Token (optional, defaults to GITHUB_TOKEN)'
+        description: 'GitHub token for committing changes (defaults to GITHUB_TOKEN)'
         required: false
 
 permissions:
   contents: write
   pull-requests: write
-  issues: write
 
 jobs:
-  # Job 1: Run analysis when PR is opened/updated
+  # Analyze when PR is opened/updated
   analyze:
-    if: |
-      github.event_name == 'pull_request' &&
-      github.actor != 'github-actions[bot]'
-    permissions:
-      contents: read
-      pull-requests: write
-      issues: write
-    uses: ./.github/workflows/analyze-pr-code.yml
-    with:
-      pr_number: ${{ inputs.pr_number || github.event.pull_request.number }}
-      repository: ${{ inputs.repository || github.repository }}
-      post_comment: true
-      test_mode: false
-      verbose: true
-    secrets:
-      cursor_api_key: ${{ secrets.cursor_api_key || secrets.CURSOR_API_KEY }}
-  
-  # Job 2: Apply logging improvements when /apply-logs is commented
-  apply-logs:
-    if: |
-      github.event_name == 'pull_request_review_comment' &&
-      contains(github.event.comment.body, '/apply-logs')
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-      issues: write
-    
     steps:
-      - name: Checkout calling repository (PR branch to modify)
+      - name: Get PR info
+        id: pr_info
+        run: |
+          echo "pr_number=${{ inputs.pr_number || github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          echo "repository=${{ inputs.repository || github.repository }}" >> $GITHUB_OUTPUT
+      
+      - name: Checkout calling repository
         uses: actions/checkout@v4
         with:
-          repository: ${{ inputs.repository || github.event.pull_request.head.repo.full_name || github.repository }}
+          repository: ${{ steps.pr_info.outputs.repository }}
           ref: ${{ github.event.pull_request.head.ref || github.ref }}
           fetch-depth: 0
-          token: ${{ secrets.git_token || secrets.BOT_GITHUB_TOKEN || github.token }}
       
-      - name: Checkout workflow repository (scripts)
+      - name: Checkout workflow repository
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.repository }}
+          repository: efrat-rabin/ai-monitoring
           path: .ai-monitoring
-          token: ${{ secrets.BOT_GITHUB_TOKEN || github.token }}
-      
-      - name: Configure Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          ref: main
       
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
           python-version: '3.11'
       
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          if [ -f .ai-monitoring/requirements.txt ]; then pip install -r .ai-monitoring/requirements.txt; fi
+          cd .ai-monitoring
+          pip install -r requirements.txt
       
-      - name: Get parent review comment
-        id: get-parent
+      - name: Run analysis
+        env:
+          CURSOR_API_KEY: ${{ secrets.cursor_api_key }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TEST_MODE: ${{ inputs.test_mode }}
         run: |
-          # Add ai-monitoring libs to Python path
           export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
-          
+          cd ${GITHUB_WORKSPACE}
+          python .ai-monitoring/actions/analyze-pr-code/code_analyzer.py \
+            --pr-number ${{ steps.pr_info.outputs.pr_number }} \
+            --repository ${{ steps.pr_info.outputs.repository }}
+      
+      - name: Post comment with results
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
+          python .ai-monitoring/actions/analyze-pr-code/post_comment.py \
+            --pr-number ${{ steps.pr_info.outputs.pr_number }} \
+            --repository ${{ steps.pr_info.outputs.repository }} \
+            --results-file analysis-results.json
+
+  # Apply fixes when developer comments /apply-logs
+  apply-logs:
+    if: |
+      github.event_name == 'pull_request_review_comment' &&
+      contains(github.event.comment.body, '/apply-logs')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get PR info
+        id: pr_info
+        run: |
+          echo "pr_number=${{ inputs.pr_number || github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          echo "repository=${{ inputs.repository || github.repository }}" >> $GITHUB_OUTPUT
+      
+      - name: Checkout calling repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.pr_info.outputs.repository }}
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          token: ${{ secrets.git_token || secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+      
+      - name: Checkout workflow repository
+        uses: actions/checkout@v4
+        with:
+          repository: efrat-rabin/ai-monitoring
+          path: .ai-monitoring
+          ref: main
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          cd .ai-monitoring
+          pip install -r requirements.txt
+      
+      - name: Check if apply should be triggered
+        id: check_apply
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
           python .ai-monitoring/actions/apply-suggested-logs/check_apply_trigger.py \
-            --pr-number "${{ inputs.pr_number || github.event.pull_request.number }}" \
-            --repository "${{ inputs.repository || github.repository }}" \
-            --comment-id "${{ github.event.comment.id }}" \
-            --in-reply-to-id "${{ github.event.comment.in_reply_to_id }}" \
-            --output-file trigger-info.json
-          
-          if [ -f trigger-info.json ]; then
-            PARENT_BODY=$(cat trigger-info.json | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('parent_comment_body', ''))")
-            echo "parent_body<<EOF" >> $GITHUB_OUTPUT
-            echo "$PARENT_BODY" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-          fi
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+            --pr-number ${{ steps.pr_info.outputs.pr_number }} \
+            --repository ${{ steps.pr_info.outputs.repository }} \
+            --comment-body "${{ github.event.comment.body }}"
       
-      - name: Apply logging improvements
-        run: |
-          # Add ai-monitoring libs to Python path
-          export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
-          
-          # Write comment body to file to avoid shell escaping issues
-          echo "$COMMENT_BODY" > /tmp/comment_body.txt
-          
-          echo "Debug: Comment body written to file (size: $(wc -c < /tmp/comment_body.txt) bytes)"
-          
-          python .ai-monitoring/actions/apply-suggested-logs/main.py \
-            --pr-number "${{ inputs.pr_number || github.event.pull_request.number }}" \
-            --repository "${{ inputs.repository || github.repository }}" \
-            --comment-body-file /tmp/comment_body.txt \
-            --comment-id "${{ github.event.comment.id }}"
+      - name: Apply suggested changes
+        if: steps.check_apply.outputs.should_apply == 'true'
         env:
-          GITHUB_TOKEN: ${{ secrets.git_token || github.token }}
-          CURSOR_API_KEY: ${{ secrets.cursor_api_key || secrets.CURSOR_API_KEY }}
-          COMMENT_BODY: ${{ steps.get-parent.outputs.parent_body }}
+          CURSOR_API_KEY: ${{ secrets.cursor_api_key }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
+          cd ${GITHUB_WORKSPACE}
+          python .ai-monitoring/actions/apply-suggested-logs/main.py \
+            --pr-number ${{ steps.pr_info.outputs.pr_number }} \
+            --repository ${{ steps.pr_info.outputs.repository }}
       
       - name: Commit and push changes
+        if: steps.check_apply.outputs.should_apply == 'true'
         run: |
-          if [[ -n $(git status --porcelain) ]]; then
-            git add .
-            git commit -m "🤖 Apply AI-suggested logging improvements
-            
-            Applied in response to review comment.
-            
-            Co-authored-by: github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
-            git push
-            echo "✅ Changes committed and pushed"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
           else
-            echo "ℹ️ No changes to commit"
+            git commit -m "Apply AI-suggested logging improvements"
+            git push
           fi
       
       - name: Post success comment
-        if: success()
-        run: |
-          python .ai-monitoring/actions/apply-suggested-logs/post_apply_comment.py \
-            --pr-number "${{ inputs.pr_number || github.event.pull_request.number }}" \
-            --repository "${{ inputs.repository || github.repository }}" \
-            --comment-id "${{ github.event.comment.id }}"
+        if: steps.check_apply.outputs.should_apply == 'true'
         env:
-          GITHUB_TOKEN: ${{ secrets.git_token || github.token }}
-
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
+          python .ai-monitoring/actions/apply-suggested-logs/post_apply_comment.py \
+            --pr-number ${{ steps.pr_info.outputs.pr_number }} \
+            --repository ${{ steps.pr_info.outputs.repository }} \
+            --success true
