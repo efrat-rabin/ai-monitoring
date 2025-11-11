@@ -7,6 +7,7 @@ import os
 import sys
 import argparse
 import json
+import yaml
 
 from ai_analyzer import AIAnalyzer
 from groundcover_client import GroundcoverClient
@@ -63,8 +64,8 @@ def main():
             print(f"URL: {gc_client.base_url}/api/monitors")
             print(f"Method: POST")
             print(f"Headers: {json.dumps(gc_client.headers, indent=2)}")
-            print(f"\nRequest Body:")
-            print(json.dumps(gc_request, indent=2))
+            print(f"\nRequest Body (YAML):")
+            print(yaml.dump(gc_request, default_flow_style=False, sort_keys=False))
             return 0
         
         # Create alert in groundcover
