@@ -425,10 +425,10 @@ def main():
                        help='Output file for analysis results')
     parser.add_argument('--test-mode', action='store_true',
                        help='Use generated mock data instead of calling Cursor API')
-    parser.add_argument('--use-mock', action='store_true',
-                       help='Use predefined mock data from mock-analysis-results.json')
-    parser.add_argument('--use-cursor', action='store_true', default=True,
-                       help='Use Cursor AI for analysis (default: True)')
+    parser.add_argument('--use-mock', action='store_true', default=True,
+                       help='Use predefined mock data from mock-analysis-results.json (default: True)')
+    parser.add_argument('--use-cursor', action='store_true',
+                       help='Use Cursor AI for analysis (requires CURSOR_API_KEY)')
     
     args = parser.parse_args()
     
@@ -469,7 +469,8 @@ def main():
     cursor = CursorAnalyzer(cursor_api_key)
     
     # Determine which mode to use
-    use_cursor = args.use_cursor and not args.test_mode and not args.use_mock
+    # Priority: --use-cursor > --test-mode > --use-mock (default)
+    use_cursor = args.use_cursor and not args.test_mode
     
     # Skip Cursor CLI setup in test mode or mock mode
     if use_cursor:
@@ -511,7 +512,9 @@ def main():
     
     # Analyze all files in one request
     print(f"\n=== Analyzing {len(changed_files)} files ===\n")
-    results = cursor.analyze_files(changed_files, prompt, test_mode=args.test_mode, use_mock=args.use_mock, verbose=verbose)
+    # If --use-cursor is set, don't use mock
+    use_mock_mode = not args.use_cursor and not args.test_mode
+    results = cursor.analyze_files(changed_files, prompt, test_mode=args.test_mode, use_mock=use_mock_mode, verbose=verbose)
     
     # Write results to file
     print(f"\n=== Analysis Complete ===")
