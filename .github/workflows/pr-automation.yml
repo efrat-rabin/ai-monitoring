@@ -220,6 +220,12 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Switch to the PR branch (we're currently in detached HEAD from SHA checkout)
+          PR_BRANCH="${{ github.event.pull_request.head.ref }}"
+          echo "Switching to branch: $PR_BRANCH"
+          git checkout "$PR_BRANCH"
+          
           git add .
           if git diff --cached --quiet; then
             echo "No changes to commit"
