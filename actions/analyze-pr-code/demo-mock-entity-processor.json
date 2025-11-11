@@ -23,7 +23,7 @@
           "recommendation": "logger.info('processed_batch', { entitiesProcessed: batch.length, skip });",
           "patch": "@@ -25,6 +26,7 @@\n             const success = await formatEntities(batch);\n             if (!success) {\n                 logger.error('batch_failed', { batchSize: batch.length, skip });\n                 return false;\n             }\n+            logger.info('processed_batch', { entitiesProcessed: batch.length, skip });\n \n             skip += batchSize;",
           "impact": "Cannot monitor batch processing progress, throughput, or identify performance bottlenecks in production.",
-          "commit_message": "Add progress logging for batch processing"
+          "commit_message": "🤖 Add progress logging for batch processing"
         },
         {
           "severity": "MEDIUM",
