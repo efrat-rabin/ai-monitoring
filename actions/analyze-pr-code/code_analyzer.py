@@ -67,9 +67,14 @@ class CursorAnalyzer:
             print("ERROR: Cursor CLI setup verification failed")
             return False
     
-    def analyze_files(self, file_paths: List[str], prompt: str, test_mode: bool = False, use_mock: bool = False, verbose: bool = True) -> List[Dict[str, Any]]:
+    def analyze_files(self, file_paths: List[str], prompt: str, test_mode: bool = False, use_mock: bool = False, demo_mode: bool = False, verbose: bool = True) -> List[Dict[str, Any]]:
         """Analyze multiple files in one request using cursor-agent."""
         print(f"Analyzing {len(file_paths)} files in batch...")
+        
+        # Demo mode: load demo-specific mock data
+        if demo_mode:
+            print("[DEMO MODE] Loading demo mock analysis results")
+            return self._load_demo_results(file_paths)
         
         # Use mock mode: load predefined mock data
         if use_mock:
@@ -362,6 +367,36 @@ class CursorAnalyzer:
         
         return result
     
+    def _load_demo_results(self, file_paths: List[str]) -> List[Dict[str, Any]]:
+        """Load demo-specific mock results based on file paths."""
+        # Map file names to their demo mock data files
+        demo_mocks = {
+            "entity-processor.ts": "demo-mock-entity-processor.json",
+            # Add more demo mock files here as needed
+        }
+        
+        # Find matching demo mock file
+        for file_path in file_paths:
+            file_name = Path(file_path).name
+            if file_name in demo_mocks:
+                demo_file = Path(__file__).parent / demo_mocks[file_name]
+                try:
+                    with open(demo_file, 'r') as f:
+                        results = json.load(f)
+                    print(f"✓ Loaded {len(results)} demo analysis results from {demo_mocks[file_name]}")
+                    return results
+                except FileNotFoundError:
+                    print(f"ERROR: Demo mock file not found at {demo_file}")
+                    return []
+                except json.JSONDecodeError as e:
+                    print(f"ERROR: Failed to parse demo mock file: {e}")
+                    return []
+        
+        # No matching demo mock found
+        print(f"⚠️  No demo mock data found for files: {file_paths}")
+        print(f"   Available demo mocks: {list(demo_mocks.keys())}")
+        return []
+    
     def _load_mock_results(self) -> List[Dict[str, Any]]:
         """Load mock analysis results from file."""
         mock_file = Path(__file__).parent / "mock-analysis-results.json"
@@ -510,6 +545,8 @@ def main():
                        help='Use generated mock data instead of calling Cursor API')
     parser.add_argument('--use-mock', action='store_true',
                        help='Use predefined mock data from mock-analysis-results.json')
+    parser.add_argument('--demo', action='store_true',
+                       help='Use demo mode with file-specific mock data')
     parser.add_argument('--use-cursor', action='store_true', default=True,
                        help='Use Cursor AI for analysis (default: True)')
     
@@ -552,10 +589,10 @@ def main():
     cursor = CursorAnalyzer(cursor_api_key)
     
     # Determine which mode to use
-    # Priority: --use-mock > --test-mode > --use-cursor (default)
-    use_cursor = not args.use_mock and not args.test_mode
+    # Priority: --demo > --use-mock > --test-mode > --use-cursor (default)
+    use_cursor = not args.demo and not args.use_mock and not args.test_mode
     
-    # Skip Cursor CLI setup in test mode or mock mode
+    # Skip Cursor CLI setup in demo, test mode, or mock mode
     if use_cursor:
         # Install and verify Cursor CLI
         if not cursor.install_cursor_cli():
@@ -566,7 +603,9 @@ def main():
             print("ERROR: Cursor CLI setup verification failed")
             return 1
     else:
-        if args.use_mock:
+        if args.demo:
+            print("[DEMO MODE] Using demo-specific mock data")
+        elif args.use_mock:
             print("[MOCK MODE] Using predefined mock data from file")
         elif args.test_mode:
             print("[TEST MODE] Using generated mock data")
@@ -595,7 +634,7 @@ def main():
     
     # Analyze all files in one request
     print(f"\n=== Analyzing {len(changed_files)} files ===\n")
-    results = cursor.analyze_files(changed_files, prompt, test_mode=args.test_mode, use_mock=args.use_mock, verbose=verbose)
+    results = cursor.analyze_files(changed_files, prompt, test_mode=args.test_mode, use_mock=args.use_mock, demo_mode=args.demo, verbose=verbose)
     
     # Write results to file
     print(f"\n=== Analysis Complete ===")

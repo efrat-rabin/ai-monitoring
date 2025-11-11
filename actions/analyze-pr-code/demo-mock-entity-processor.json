@@ -1,0 +1,51 @@
+[
+  {
+    "file": "apps/web/src/lib/entity-processor.ts",
+    "analysis": {
+      "issues": [
+        {
+          "severity": "HIGH",
+          "category": "missing-logs",
+          "line": 31,
+          "method": "processBatch",
+          "description": "Missing error log when batch processing fails. When formatEntity returns false, the failure is silently propagated without logging which entity caused the failure.",
+          "recommendation": "logger.error('batch_failed', { entityId: entity.id, batchSize: batch.length });",
+          "patch": "@@ -28,6 +28,7 @@\n     private async processBatch(batch: Entity[]): Promise<boolean> {\n         for (const entity of batch) {\n             const success = await formatEntity(entity);\n             if (!success) {\n+                logger.error('batch_failed', { entityId: entity.id, batchSize: batch.length });\n                 return false;\n             }\n         }",
+          "impact": "When batch processing fails, there is no visibility into which entity caused the failure, making debugging production issues extremely difficult."
+        },
+        {
+          "severity": "CRITICAL",
+          "category": "missing-logs",
+          "line": 32,
+          "method": "processBatch",
+          "description": "Missing error log when individual entity formatting fails. The failure is returned without any context about which entity failed or why.",
+          "recommendation": "logger.error('entity_failed', { entityId: entity.id, error: 'formatEntity returned false' });",
+          "patch": "@@ -29,6 +29,7 @@\n         for (const entity of batch) {\n             const success = await formatEntity(entity);\n             if (!success) {\n+                logger.error('entity_failed', { entityId: entity.id, error: 'formatEntity returned false' });\n                 return false;\n             }\n         }",
+          "impact": "Individual entity failures are completely invisible in production, preventing root cause analysis and making it impossible to identify problematic entities."
+        },
+        {
+          "severity": "MEDIUM",
+          "category": "missing-logs",
+          "line": 35,
+          "method": "processBatch",
+          "description": "Missing success log after processing a batch. No visibility into batch processing progress or throughput metrics.",
+          "recommendation": "logger.info('processed_batch', { entitiesProcessed: batch.length });",
+          "patch": "@@ -33,6 +33,7 @@\n                 return false;\n             }\n         }\n+        logger.info('processed_batch', { entitiesProcessed: batch.length });\n         return true;\n     }\n }",
+          "impact": "Cannot monitor batch processing progress, throughput, or identify performance bottlenecks in production."
+        },
+        {
+          "severity": "MEDIUM",
+          "category": "missing-logs",
+          "line": 25,
+          "method": "process",
+          "description": "Missing completion log after all batches are processed. No visibility into total entities processed or overall processing success.",
+          "recommendation": "logger.info('completed_processing', { totalEntities: skip });",
+          "patch": "@@ -22,6 +22,7 @@\n             skip += batchSize;\n             hasMore = batch.length === batchSize;\n         }\n+        logger.info('completed_processing', { totalEntities: skip });\n         return true;\n     }\n ",
+          "impact": "Cannot track overall processing metrics, total entities processed, or confirm successful completion of processing jobs."
+        }
+      ],
+      "summary": "Entity processor lacks critical logging for error tracking and observability. Missing logs for batch failures, entity failures, batch completion, and overall processing completion."
+    }
+  }
+]
+

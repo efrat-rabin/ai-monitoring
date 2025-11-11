@@ -20,6 +20,11 @@ on:
         type: boolean
         required: false
         default: false
+      demo:
+        description: 'Run in demo mode (uses file-specific mock data)'
+        type: boolean
+        required: false
+        default: false
     secrets:
       cursor_api_key:
         description: 'Cursor API key for AI analysis'
@@ -73,12 +78,23 @@ jobs:
           CURSOR_API_KEY: ${{ secrets.cursor_api_key }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TEST_MODE: ${{ inputs.test_mode }}
+          DEMO_MODE: ${{ inputs.demo }}
         run: |
           export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
           cd ${GITHUB_WORKSPACE}
-          python .ai-monitoring/actions/analyze-pr-code/code_analyzer.py \
+          
+          # Build command with appropriate flags
+          CMD="python .ai-monitoring/actions/analyze-pr-code/code_analyzer.py \
             --pr-number ${{ steps.pr_info.outputs.pr_number }} \
-            --repository ${{ steps.pr_info.outputs.repository }}
+            --repository ${{ steps.pr_info.outputs.repository }}"
+          
+          if [ "${{ inputs.demo }}" = "true" ]; then
+            CMD="$CMD --demo"
+          elif [ "${{ inputs.test_mode }}" = "true" ]; then
+            CMD="$CMD --test-mode"
+          fi
+          
+          eval $CMD
       
       - name: Post comment with results
         env:

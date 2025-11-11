@@ -20,6 +20,11 @@ on:
         required: false
         default: false
         type: boolean
+      demo:
+        description: 'Use demo mode with file-specific mock data'
+        required: false
+        default: false
+        type: boolean
       post_comment:
         description: 'Post comment on PR with results'
         required: false
@@ -47,6 +52,11 @@ on:
         type: boolean
       test_mode:
         description: 'Use mock data instead of calling Cursor API'
+        required: false
+        default: false
+        type: boolean
+      demo:
+        description: 'Use demo mode with file-specific mock data'
         required: false
         default: false
         type: boolean
@@ -115,7 +125,9 @@ jobs:
           # Add ai-monitoring libs to Python path
           export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
           
-          if [ "${{ inputs.test_mode }}" = "true" ]; then
+          if [ "${{ inputs.demo }}" = "true" ]; then
+            python .ai-monitoring/actions/analyze-pr-code/code_analyzer.py --demo
+          elif [ "${{ inputs.test_mode }}" = "true" ]; then
             python .ai-monitoring/actions/analyze-pr-code/code_analyzer.py --test-mode
           else
             python .ai-monitoring/actions/analyze-pr-code/code_analyzer.py
