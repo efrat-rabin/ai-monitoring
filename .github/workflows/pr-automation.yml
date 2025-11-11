@@ -286,7 +286,13 @@ jobs:
       - name: Install Playwright browsers
         run: playwright install chromium
       
-      - name: Post monitor preview
+      - name: Configure git
+        run: |
+          cd .ai-monitoring
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      
+      - name: Generate and commit preview image
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -295,4 +301,20 @@ jobs:
             --pr-number ${{ steps.pr_info.outputs.pr_number }} \
             --repository ${{ steps.pr_info.outputs.repository }} \
             --comment-id "${{ github.event.comment.id }}" \
-            --mock-monitor .ai-monitoring/actions/apply-suggested-gc-resources/mock-monitor.yaml
+            --mock-monitor .ai-monitoring/actions/apply-suggested-gc-resources/mock-monitor.yaml \
+            --workflow-repo-path .ai-monitoring
+      
+      - name: Push preview image to repo
+        run: |
+          cd .ai-monitoring
+          if [ -n "$(git status --porcelain)" ]; then
+            git add preview-images/
+            git commit -m "Add monitor preview image [skip ci]"
+            git push origin main
+            echo "Preview image committed and pushed"
+          else
+            echo "No new preview image to commit"
+          fi
+      
+      - name: Wait for GitHub to process the image
+        run: sleep 5

@@ -7,12 +7,14 @@ import argparse
 import json
 import yaml
 import requests
-import base64
+import shutil
+import time
 from generate_monitor_image import generate_monitor_image_sync
 
 
 def post_preview_comment(github_token: str, repository: str, pr_number: int, 
-                        comment_id: str, mock_monitor_path: str, verbose: bool = False):
+                        comment_id: str, mock_monitor_path: str, workflow_repo_path: str = None,
+                        verbose: bool = False):
     """Post a monitor preview comment as reply to the /generate-alerts comment."""
     owner, repo = repository.split("/")
     
@@ -20,66 +22,58 @@ def post_preview_comment(github_token: str, repository: str, pr_number: int,
     with open(mock_monitor_path, 'r') as f:
         monitor = yaml.safe_load(f)
     
-    if verbose:
-        print(f"[DEBUG] Generating monitor preview image...")
-    
-    # Generate monitor preview image
-    image_path = generate_monitor_image_sync(monitor, 'monitor-preview.png')
-    
-    if verbose:
-        print(f"[DEBUG] Image generated: {image_path}")
-    
-    # Read image and encode as base64
-    with open(image_path, 'rb') as f:
-        image_data = f.read()
-        image_base64 = base64.b64encode(image_data).decode('utf-8')
-    
-    print(f"[INFO] Image size: {len(image_data)} bytes, base64 length: {len(image_base64)} chars")
-    
-    if verbose:
-        print(f"[DEBUG] Creating GitHub Gist with image...")
-    
-    # Create a GitHub Gist with the image
-    gist_url = "https://api.github.com/gists"
-    gist_headers = {
-        "Authorization": f"Bearer {github_token}",
-        "Accept": "application/vnd.github+json",
-    }
-    
     title = monitor.get('title', 'Monitor')
-    gist_payload = {
-        "description": f"GroundCover Monitor Preview - {title}",
-        "public": True,
-        "files": {
-            "monitor-preview.png": {
-                "content": image_base64
-            }
-        }
-    }
     
-    if verbose:
-        print(f"[DEBUG] Gist payload structure: public={gist_payload['public']}, files={list(gist_payload['files'].keys())}")
+    print(f"[INFO] Generating monitor preview image...")
     
-    print(f"[INFO] Creating GitHub Gist...")
+    # Generate monitor preview image with timestamp to make it unique
+    timestamp = int(time.time())
+    temp_image_name = f'monitor-preview-{timestamp}.png'
+    image_path = generate_monitor_image_sync(monitor, temp_image_name)
     
-    # Create the gist
-    gist_response = requests.post(gist_url, headers=gist_headers, json=gist_payload)
+    print(f"[INFO] Image generated: {image_path}")
     
-    print(f"[INFO] Gist API response status: {gist_response.status_code}")
+    # Get file size
+    image_size = os.path.getsize(image_path)
+    print(f"[INFO] Image size: {image_size} bytes")
     
-    if verbose:
-        print(f"[DEBUG] Gist response headers: {dict(gist_response.headers)}")
-    
-    if gist_response.status_code != 201:
-        # Fallback to markdown if gist creation fails
-        print(f"[ERROR] Gist creation failed with status {gist_response.status_code}")
-        print(f"[ERROR] Response body: {gist_response.text}")
+    # Move image to workflow repo if path provided
+    if workflow_repo_path:
+        # Create preview-images directory if it doesn't exist
+        preview_dir = os.path.join(workflow_repo_path, 'preview-images')
+        os.makedirs(preview_dir, exist_ok=True)
         
-        if verbose:
-            print(f"[DEBUG] Falling back to markdown format")
+        # Move image to the preview directory
+        dest_path = os.path.join(preview_dir, temp_image_name)
+        shutil.move(image_path, dest_path)
         
-        # Use simple markdown format as fallback
-        title = monitor.get('title', 'Monitor')
+        print(f"[INFO] Image moved to: {dest_path}")
+        
+        # Construct GitHub raw URL
+        # Format: https://raw.githubusercontent.com/{owner}/{repo}/main/preview-images/{filename}
+        workflow_owner = "efrat-rabin"  # The ai-monitoring repo owner
+        workflow_repo = "ai-monitoring"
+        image_url = f"https://raw.githubusercontent.com/{workflow_owner}/{workflow_repo}/main/preview-images/{temp_image_name}"
+        
+        print(f"[INFO] Image will be accessible at: {image_url}")
+        
+        # Create comment with image
+        comment_body = f"""## 🔍 GroundCover Monitor Preview
+
+![Monitor Preview]({image_url})
+
+---
+
+**Reply with `/create-monitor` to create it.**
+
+_Preview by AI automation 🤖_"""
+        
+        print(f"[INFO] Comment will contain image from GitHub repo")
+        
+    else:
+        # Fallback to markdown if no workflow repo path provided
+        print(f"[WARNING] No workflow repo path provided, using markdown fallback")
+        
         description = monitor['display']['description']
         severity = monitor.get('severity', 'Unknown')
         monitor_type = monitor.get('measurementType', 'state').title()
@@ -115,42 +109,10 @@ def post_preview_comment(github_token: str, repository: str, pr_number: int,
 **Reply with `/create-monitor` to create it.**
 
 _Preview by AI automation 🤖_"""
-    else:
-        # Gist created successfully - get the raw URL
-        print(f"[INFO] Gist created successfully!")
         
-        gist_data = gist_response.json()
-        
-        if verbose:
-            print(f"[DEBUG] Gist response keys: {list(gist_data.keys())}")
-            print(f"[DEBUG] Gist files: {list(gist_data.get('files', {}).keys())}")
-        
-        print(f"[INFO] Gist ID: {gist_data.get('id')}")
-        print(f"[INFO] Gist URL: {gist_data.get('html_url')}")
-        
-        image_url = gist_data['files']['monitor-preview.png']['raw_url']
-        
-        print(f"[INFO] Image raw URL: {image_url}")
-        
-        if verbose:
-            print(f"[DEBUG] Full file data: {gist_data['files']['monitor-preview.png'].keys()}")
-        
-        # Create comment with gist image
-        comment_body = f"""## 🔍 GroundCover Monitor Preview
-
-![Monitor Preview]({image_url})
-
----
-
-**Reply with `/create-monitor` to create it.**
-
-_Preview by AI automation 🤖_"""
-        
-        print(f"[INFO] Comment will contain image from Gist")
-    
-    # Clean up image file
-    if os.path.exists(image_path):
-        os.remove(image_path)
+        # Clean up temp image since we're not using it
+        if os.path.exists(image_path):
+            os.remove(image_path)
     
     # Use PR review comments API
     url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/comments"
@@ -202,6 +164,8 @@ def main():
     parser.add_argument("--comment-id", type=str, required=True)
     parser.add_argument("--mock-monitor", type=str, 
                        default="actions/apply-suggested-gc-resources/mock-monitor.yaml")
+    parser.add_argument("--workflow-repo-path", type=str, default=None,
+                       help="Path to the workflow repo for committing image")
     args = parser.parse_args()
     
     verbose = os.getenv('ACTIONS_STEP_DEBUG', 'false').lower() in ('true', '1')
@@ -212,6 +176,7 @@ def main():
         print(f"[DEBUG] Repository: {args.repository}")
         print(f"[DEBUG] Comment ID: {args.comment_id}")
         print(f"[DEBUG] Mock Monitor Path: {args.mock_monitor}")
+        print(f"[DEBUG] Workflow Repo Path: {args.workflow_repo_path}")
     
     github_token = os.getenv("GITHUB_TOKEN")
     if not github_token:
@@ -228,6 +193,7 @@ def main():
             int(args.pr_number), 
             args.comment_id,
             args.mock_monitor,
+            args.workflow_repo_path,
             verbose=verbose
         )
         
