@@ -58,13 +58,18 @@ class CursorAnalyzer:
             print("ERROR: Cursor CLI setup verification failed")
             return False
     
-    def analyze_files(self, file_paths: List[str], prompt: str, test_mode: bool = False, verbose: bool = True) -> List[Dict[str, Any]]:
+    def analyze_files(self, file_paths: List[str], prompt: str, test_mode: bool = False, use_mock: bool = False, verbose: bool = True) -> List[Dict[str, Any]]:
         """Analyze multiple files in one request using cursor-agent."""
         print(f"Analyzing {len(file_paths)} files in batch...")
         
-        # Test mode: return mock data
+        # Use mock mode: load predefined mock data
+        if use_mock:
+            print("[MOCK MODE] Loading mock analysis results from file")
+            return self._load_mock_results()
+        
+        # Test mode: return generated mock data
         if test_mode:
-            print("[TEST MODE] Using mock analysis results")
+            print("[TEST MODE] Using generated mock analysis results")
             return self._generate_mock_results(file_paths)
         
         if not self.cursor_client:
@@ -274,6 +279,22 @@ class CursorAnalyzer:
                 traceback.print_exc()
             return None
     
+    def _load_mock_results(self) -> List[Dict[str, Any]]:
+        """Load mock analysis results from file."""
+        mock_file = Path(__file__).parent / "mock-analysis-results.json"
+        
+        try:
+            with open(mock_file, 'r') as f:
+                results = json.load(f)
+            print(f"✓ Loaded {len(results)} mock analysis results")
+            return results
+        except FileNotFoundError:
+            print(f"ERROR: Mock file not found at {mock_file}")
+            return []
+        except json.JSONDecodeError as e:
+            print(f"ERROR: Failed to parse mock file: {e}")
+            return []
+    
     def _generate_mock_results(self, file_paths: List[str]) -> List[Dict[str, Any]]:
         """Generate mock analysis results for testing."""
         results = []
@@ -403,7 +424,11 @@ def main():
                        default='analysis-results.json',
                        help='Output file for analysis results')
     parser.add_argument('--test-mode', action='store_true',
-                       help='Use mock data instead of calling Cursor API')
+                       help='Use generated mock data instead of calling Cursor API')
+    parser.add_argument('--use-mock', action='store_true',
+                       help='Use predefined mock data from mock-analysis-results.json')
+    parser.add_argument('--use-cursor', action='store_true', default=True,
+                       help='Use Cursor AI for analysis (default: True)')
     
     args = parser.parse_args()
     
@@ -443,8 +468,11 @@ def main():
     # Initialize Cursor analyzer
     cursor = CursorAnalyzer(cursor_api_key)
     
-    # Skip Cursor CLI setup in test mode
-    if not args.test_mode:
+    # Determine which mode to use
+    use_cursor = args.use_cursor and not args.test_mode and not args.use_mock
+    
+    # Skip Cursor CLI setup in test mode or mock mode
+    if use_cursor:
         # Install and verify Cursor CLI
         if not cursor.install_cursor_cli():
             print("ERROR: Failed to install Cursor CLI")
@@ -454,7 +482,12 @@ def main():
             print("ERROR: Cursor CLI setup verification failed")
             return 1
     else:
-        print("[TEST MODE] Skipping Cursor CLI setup")
+        if args.use_mock:
+            print("[MOCK MODE] Using predefined mock data from file")
+        elif args.test_mode:
+            print("[TEST MODE] Using generated mock data")
+        else:
+            print("[SKIP MODE] Cursor CLI setup skipped")
     
     # Get changed files
     pr_analyzer = GitHubPRAnalyzer(github_token, repository, pr_number)
@@ -478,7 +511,7 @@ def main():
     
     # Analyze all files in one request
     print(f"\n=== Analyzing {len(changed_files)} files ===\n")
-    results = cursor.analyze_files(changed_files, prompt, test_mode=args.test_mode, verbose=verbose)
+    results = cursor.analyze_files(changed_files, prompt, test_mode=args.test_mode, use_mock=args.use_mock, verbose=verbose)
     
     # Write results to file
     print(f"\n=== Analysis Complete ===")

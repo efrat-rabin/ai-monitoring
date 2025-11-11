@@ -1,0 +1,147 @@
+[
+  {
+    "file": "apps/api/src/middleware/error-handler.ts",
+    "analysis": {
+      "issues": [
+        {
+          "severity": "CRITICAL",
+          "category": "correlation-id",
+          "line": 8,
+          "method": "errorHandler",
+          "description": "Missing correlation ID/request ID in error logs prevents tracing errors across distributed systems and correlating with request logs",
+          "recommendation": "logger.error('Unhandled error:', { error: err.message, stack: err.stack, correlationId: req.headers['x-correlation-id'] || req.id, method: req.method, path: req.path, statusCode: 500 });",
+          "patch": "@@ -5,7 +5,7 @@\n const logger = new Logger(\"ErrorHandler\");\n \n export function errorHandler(\n   err: Error,\n   req: Request,\n   res: Response,\n   next: NextFunction\n ) {\n-  logger.error(\"Unhandled error:\", err);\n+  logger.error('Unhandled error:', { error: err.message, stack: err.stack, correlationId: req.headers['x-correlation-id'] || req.id, method: req.method, path: req.path, statusCode: 500 });\n \n   res.status(500).json({\n     message: process.env.NODE_ENV === \"development\" ? err.message : undefined,\n   });\n",
+          "impact": "Without correlation IDs, errors cannot be traced back to specific requests, making production debugging nearly impossible in distributed systems"
+        },
+        {
+          "severity": "HIGH",
+          "category": "error-context",
+          "line": 8,
+          "method": "errorHandler",
+          "description": "Missing request context (headers, query params, body) in error logs prevents understanding what triggered the error",
+          "recommendation": "logger.error('Unhandled error:', { error: err.message, stack: err.stack, correlationId: req.headers['x-correlation-id'] || req.id, method: req.method, path: req.path, query: req.query, headers: req.headers, body: req.body, statusCode: 500 });",
+          "patch": "@@ -5,7 +5,7 @@\n const logger = new Logger(\"ErrorHandler\");\n \n export function errorHandler(\n   err: Error,\n   req: Request,\n   res: Response,\n   next: NextFunction\n ) {\n-  logger.error(\"Unhandled error:\", err);\n+  logger.error('Unhandled error:', { error: err.message, stack: err.stack, correlationId: req.headers['x-correlation-id'] || req.id, method: req.method, path: req.path, query: req.query, headers: req.headers, body: req.body, statusCode: 500 });\n \n   res.status(500).json({\n     message: process.env.NODE_ENV === \"development\" ? err.message : undefined,\n   });\n",
+          "impact": "Missing request context makes it difficult to reproduce and debug errors, especially for authentication or input validation issues"
+        },
+        {
+          "severity": "HIGH",
+          "category": "structured-logging",
+          "line": 8,
+          "method": "errorHandler",
+          "description": "Using string concatenation instead of structured logging prevents proper log aggregation and filtering in monitoring systems",
+          "recommendation": "logger.error('Unhandled error:', { error: err.message, stack: err.stack, correlationId: req.headers['x-correlation-id'] || req.id, method: req.method, path: req.path, statusCode: 500 });",
+          "patch": "@@ -5,7 +5,7 @@\n const logger = new Logger(\"ErrorHandler\");\n \n export function errorHandler(\n   err: Error,\n   req: Request,\n   res: Response,\n   next: NextFunction\n ) {\n-  logger.error(\"Unhandled error:\", err);\n+  logger.error('Unhandled error:', { error: err.message, stack: err.stack, correlationId: req.headers['x-correlation-id'] || req.id, method: req.method, path: req.path, statusCode: 500 });\n \n   res.status(500).json({\n     message: process.env.NODE_ENV === \"development\" ? err.message : undefined,\n   });\n",
+          "impact": "Non-structured logs cannot be efficiently queried, filtered, or aggregated in log management systems like ELK, Datadog, or Splunk"
+        }
+      ],
+      "summary": "Error handler lacks correlation IDs, structured logging, and request context. Critical for production debugging in distributed systems."
+    }
+  },
+  {
+    "file": "apps/api/src/services/cursor.service.ts",
+    "analysis": {
+      "issues": [
+        {
+          "severity": "CRITICAL",
+          "category": "error-context",
+          "line": 45,
+          "method": "applyLogSuggestions",
+          "description": "Catch block logs error but lacks context about which file failed, what suggestions were being applied, and operation details",
+          "recommendation": "logger.error('Failed to apply suggestions to file:', { file, suggestionCount: suggestions.length, error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined });",
+          "patch": "@@ -42,9 +42,9 @@\n         await fs.writeFile(filePath, modifiedContent);\n         modifiedFiles.set(file, modifiedContent);\n \n         logger.info(`Applied ${suggestions.length} suggestions to ${file}`);\n       } catch (error) {\n-        logger.error(`Failed to apply suggestions to ${file}:`, error);\n+        logger.error('Failed to apply suggestions to file:', { file, suggestionCount: suggestions.length, error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined });\n       }\n     }\n \n     return modifiedFiles;\n",
+          "impact": "Without error context, debugging file write failures or suggestion application issues becomes extremely difficult in production"
+        },
+        {
+          "severity": "HIGH",
+          "category": "performance-metrics",
+          "line": 20,
+          "method": "applyLogSuggestions",
+          "description": "Missing performance timing for file operations prevents monitoring slow file writes and identifying performance bottlenecks",
+          "recommendation": "const startTime = Date.now();\n    logger.info(`Applying ${logSuggestions.length} log suggestions`);\n    const modifiedFiles = new Map<string, string>();\n    const suggestionsByFile = new Map<string, LogSuggestion[]>();\n    for (const suggestion of logSuggestions) {\n      const suggestions = suggestionsByFile.get(suggestion.file) || [];\n      suggestions.push(suggestion);\n      suggestionsByFile.set(suggestion.file, suggestions);\n    }\n    for (const [file, suggestions] of suggestionsByFile.entries()) {\n      try {\n        const fileStartTime = Date.now();\n        const filePath = path.join(repoPath, file);\n        const content = await fs.readFile(filePath, \"utf-8\");\n        const modifiedContent = await this.applyLogsToFile(content, suggestions);\n        await fs.writeFile(filePath, modifiedContent);\n        modifiedFiles.set(file, modifiedContent);\n        const fileDuration = Date.now() - fileStartTime;\n        logger.info(`Applied ${suggestions.length} suggestions to ${file}`, { file, suggestionCount: suggestions.length, durationMs: fileDuration });\n      } catch (error) {\n        logger.error('Failed to apply suggestions to file:', { file, suggestionCount: suggestions.length, error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined });\n      }\n    }\n    const totalDuration = Date.now() - startTime;\n    logger.info('Completed applying log suggestions', { totalSuggestions: logSuggestions.length, filesModified: modifiedFiles.size, durationMs: totalDuration });",
+          "patch": "@@ -17,11 +17,15 @@\n   async applyLogSuggestions(\n     repoPath: string,\n     logSuggestions: LogSuggestion[]\n   ): Promise<Map<string, string>> {\n+    const startTime = Date.now();\n     logger.info(`Applying ${logSuggestions.length} log suggestions`);\n \n     const modifiedFiles = new Map<string, string>();\n \n     // Group suggestions by file\n     const suggestionsByFile = new Map<string, LogSuggestion[]>();\n     for (const suggestion of logSuggestions) {\n       const suggestions = suggestionsByFile.get(suggestion.file) || [];\n       suggestions.push(suggestion);\n       suggestionsByFile.set(suggestion.file, suggestions);\n     }\n \n     // Apply suggestions to each file\n     for (const [file, suggestions] of suggestionsByFile.entries()) {\n       try {\n+        const fileStartTime = Date.now();\n         const filePath = path.join(repoPath, file);\n         const content = await fs.readFile(filePath, \"utf-8\");\n         const modifiedContent = await this.applyLogsToFile(\n           content,\n           suggestions\n         );\n \n         await fs.writeFile(filePath, modifiedContent);\n         modifiedFiles.set(file, modifiedContent);\n \n-        logger.info(`Applied ${suggestions.length} suggestions to ${file}`);\n+        const fileDuration = Date.now() - fileStartTime;\n+        logger.info(`Applied ${suggestions.length} suggestions to ${file}`, { file, suggestionCount: suggestions.length, durationMs: fileDuration });\n       } catch (error) {\n-        logger.error(`Failed to apply suggestions to ${file}:`, error);\n+        logger.error('Failed to apply suggestions to file:', { file, suggestionCount: suggestions.length, error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined });\n       }\n     }\n \n+    const totalDuration = Date.now() - startTime;\n+    logger.info('Completed applying log suggestions', { totalSuggestions: logSuggestions.length, filesModified: modifiedFiles.size, durationMs: totalDuration });\n     return modifiedFiles;\n   }",
+          "impact": "Cannot identify slow file operations or monitor performance degradation over time, making it impossible to set SLAs or detect performance regressions"
+        },
+        {
+          "severity": "HIGH",
+          "category": "error-context",
+          "line": 100,
+          "method": "formatCode",
+          "description": "Silently swallows formatting errors without logging, preventing detection of Cursor CLI issues or configuration problems",
+          "recommendation": "logger.warn('Failed to format code', { filePath, error: error instanceof Error ? error.message : String(error) });",
+          "patch": "@@ -97,6 +97,6 @@\n   async formatCode(filePath: string): Promise<void> {\n     try {\n       await execAsync(`${this.cursorPath} --format \"${filePath}\"`);\n       logger.info(`Formatted ${filePath}`);\n     } catch (error) {\n-      // Continue even if formatting fails\n+      logger.warn('Failed to format code', { filePath, error: error instanceof Error ? error.message : String(error) });\n     }\n   }",
+          "impact": "Formatting failures go undetected, potentially leading to unformatted code in production without awareness of the issue"
+        },
+        {
+          "severity": "MEDIUM",
+          "category": "correlation-id",
+          "line": 20,
+          "method": "applyLogSuggestions",
+          "description": "Missing correlation ID propagation prevents tracing file operations across service boundaries",
+          "recommendation": "logger.info(`Applying ${logSuggestions.length} log suggestions`, { correlationId: req?.headers?.['x-correlation-id'] || req?.id, repoPath, totalSuggestions: logSuggestions.length });",
+          "patch": "@@ -17,4 +17,4 @@\n   async applyLogSuggestions(\n     repoPath: string,\n     logSuggestions: LogSuggestion[]\n   ): Promise<Map<string, string>> {\n-    logger.info(`Applying ${logSuggestions.length} log suggestions`);\n+    logger.info(`Applying ${logSuggestions.length} log suggestions`, { repoPath, totalSuggestions: logSuggestions.length });\n",
+          "impact": "Cannot correlate file operations with upstream requests, making distributed tracing incomplete"
+        }
+      ],
+      "summary": "Missing error context in catch blocks, performance timing for file operations, and structured logging. Critical for debugging file operation failures."
+    }
+  },
+  {
+    "file": "apps/api/src/services/github.service.ts",
+    "analysis": {
+      "issues": [
+        {
+          "severity": "CRITICAL",
+          "category": "error-context",
+          "line": 50,
+          "method": "getFileContent",
+          "description": "Error logging is commented out, causing silent failures when fetching file content from GitHub",
+          "recommendation": "logger.error('Failed to get file content', { owner, repo, path, ref, error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined });",
+          "patch": "@@ -47,7 +47,7 @@\n       return Buffer.from(data.content, \"base64\").toString(\"utf-8\");\n       }\n       return null;\n     } catch (error) {\n-      // logger.error(`Failed to get file content: ${path}`, error);\n+      logger.error('Failed to get file content', { owner, repo, path, ref, error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined });\n       return null;\n     }\n   }",
+          "impact": "Silent failures prevent detection of GitHub API issues, authentication problems, or file access errors, making debugging impossible"
+        },
+        {
+          "severity": "HIGH",
+          "category": "performance-metrics",
+          "line": 18,
+          "method": "getPR",
+          "description": "Missing performance timing for GitHub API calls prevents monitoring API latency and detecting slow responses",
+          "recommendation": "const startTime = Date.now();\n    logger.info(`Fetching PR #${prNumber} from ${owner}/${repo}`, { owner, repo, prNumber });\n    const { data } = await this.octokit.pulls.get({ owner, repo, pull_number: prNumber });\n    const duration = Date.now() - startTime;\n    logger.info('Fetched PR successfully', { owner, repo, prNumber, durationMs: duration });",
+          "patch": "@@ -15,7 +15,9 @@\n   async getPR(owner: string, repo: string, prNumber: number) {\n     logger.info(`Fetching PR #${prNumber} from ${owner}/${repo}`);\n     const { data } = await this.octokit.pulls.get({\n       owner,\n       repo,\n       pull_number: prNumber,\n     });\n+    const duration = Date.now() - startTime;\n+    logger.info('Fetched PR successfully', { owner, repo, prNumber, durationMs: duration });\n     return data;\n   }",
+          "impact": "Cannot monitor GitHub API performance, detect rate limiting issues, or set SLAs for external API calls"
+        },
+        {
+          "severity": "HIGH",
+          "category": "structured-logging",
+          "line": 18,
+          "method": "getPR",
+          "description": "Using string interpolation instead of structured logging prevents proper log aggregation and filtering",
+          "recommendation": "logger.info('Fetching PR', { owner, repo, prNumber });",
+          "patch": "@@ -15,7 +15,7 @@\n   async getPR(owner: string, repo: string, prNumber: number) {\n-    logger.info(`Fetching PR #${prNumber} from ${owner}/${repo}`);\n+    logger.info('Fetching PR', { owner, repo, prNumber });\n     const { data } = await this.octokit.pulls.get({\n       owner,\n       repo,\n       pull_number: prNumber,\n     });\n     return data;\n   }",
+          "impact": "Non-structured logs cannot be efficiently queried or aggregated in monitoring systems, reducing observability"
+        },
+        {
+          "severity": "HIGH",
+          "category": "error-context",
+          "line": 18,
+          "method": "getPR",
+          "description": "Missing error handling and logging for GitHub API failures prevents detecting API errors, rate limits, or network issues",
+          "recommendation": "try {\n    const startTime = Date.now();\n    logger.info('Fetching PR', { owner, repo, prNumber });\n    const { data } = await this.octokit.pulls.get({ owner, repo, pull_number: prNumber });\n    const duration = Date.now() - startTime;\n    logger.info('Fetched PR successfully', { owner, repo, prNumber, durationMs: duration });\n    return data;\n  } catch (error) {\n    logger.error('Failed to fetch PR', { owner, repo, prNumber, error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined, statusCode: error instanceof Error && 'status' in error ? (error as any).status : undefined });\n    throw error;\n  }",
+          "patch": "@@ -14,11 +14,17 @@\n   /**\n    * Get PR details\n    */\n   async getPR(owner: string, repo: string, prNumber: number) {\n-    logger.info(`Fetching PR #${prNumber} from ${owner}/${repo}`);\n-    const { data } = await this.octokit.pulls.get({\n+    try {\n+      const startTime = Date.now();\n+      logger.info('Fetching PR', { owner, repo, prNumber });\n+      const { data } = await this.octokit.pulls.get({\n       owner,\n       repo,\n       pull_number: prNumber,\n     });\n+      const duration = Date.now() - startTime;\n+      logger.info('Fetched PR successfully', { owner, repo, prNumber, durationMs: duration });\n       return data;\n+    } catch (error) {\n+      logger.error('Failed to fetch PR', { owner, repo, prNumber, error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined, statusCode: error instanceof Error && 'status' in error ? (error as any).status : undefined });\n+      throw error;\n+    }\n   }",
+          "impact": "GitHub API failures (rate limits, authentication errors, network issues) go undetected, making production issues difficult to diagnose"
+        },
+        {
+          "severity": "MEDIUM",
+          "category": "correlation-id",
+          "line": 18,
+          "method": "getPR",
+          "description": "Missing correlation ID in GitHub API operation logs prevents tracing operations across service boundaries",
+          "recommendation": "logger.info('Fetching PR', { owner, repo, prNumber, correlationId: req?.headers?.['x-correlation-id'] || req?.id });",
+          "patch": "@@ -15,7 +15,7 @@\n   async getPR(owner: string, repo: string, prNumber: number) {\n-    logger.info(`Fetching PR #${prNumber} from ${owner}/${repo}`);\n+    logger.info('Fetching PR', { owner, repo, prNumber });\n     const { data } = await this.octokit.pulls.get({\n       owner,\n       repo,\n       pull_number: prNumber,\n     });\n     return data;\n   }",
+          "impact": "Cannot correlate GitHub API calls with upstream requests, breaking distributed tracing across microservices"
+        }
+      ],
+      "summary": "Critical: Error logging commented out in getFileContent. High: Missing error handling, performance timing, and structured logging for GitHub API calls."
+    }
+  }
+]
+

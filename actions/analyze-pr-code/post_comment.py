@@ -31,6 +31,17 @@ def format_review_comment(issue: Dict[str, Any], file_path: str) -> str:
     line = issue.get("line", "N/A")
     
     # Include metadata as hidden JSON for parsing
+    recommendation = issue.get("recommendation", "")
+    patch = issue.get("patch", "")
+    
+    # Debug: Check if doubled quotes already exist in source data
+    if "''" in recommendation:
+        print(f"⚠️  WARNING: Doubled quotes found in recommendation FROM CURSOR!")
+        print(f"  Preview: {recommendation[:100]}")
+    if "''" in patch:
+        print(f"⚠️  WARNING: Doubled quotes found in patch FROM CURSOR!")
+        print(f"  Preview: {patch[:100]}")
+    
     metadata = {
         "file": file_path,
         "file_hash": compute_file_hash(file_path),
@@ -39,8 +50,8 @@ def format_review_comment(issue: Dict[str, Any], file_path: str) -> str:
         "method": method,
         "line": line,
         "description": issue.get("description", ""),
-        "recommendation": issue.get("recommendation", ""),
-        "patch": issue.get("patch", ""),
+        "recommendation": recommendation,
+        "patch": patch,
         "impact": issue.get("impact", "")
     }
     
@@ -57,7 +68,19 @@ def format_review_comment(issue: Dict[str, Any], file_path: str) -> str:
     
     comment += "---\n"
     comment += "Reply with `/apply-logs` to apply this change automatically.\n\n"
-    comment += f"<!-- ISSUE_DATA: {json.dumps(metadata)} -->"
+    
+    # Serialize metadata as JSON
+    # Use ensure_ascii=False to prevent unnecessary escaping of quotes
+    # Use separators to avoid extra whitespace
+    metadata_json = json.dumps(metadata, ensure_ascii=False, separators=(',', ':'))
+    
+    # Debug: Check for doubled quotes before posting
+    if "''" in metadata_json:
+        print(f"⚠️  WARNING: Found doubled single quotes in metadata JSON!")
+        print(f"  Patch preview: {metadata.get('patch', '')[:200]}")
+        print(f"  Recommendation preview: {metadata.get('recommendation', '')[:100]}")
+    
+    comment += f"<!-- ISSUE_DATA: {metadata_json} -->"
     
     return comment
 
