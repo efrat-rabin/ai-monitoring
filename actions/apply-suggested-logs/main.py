@@ -80,6 +80,50 @@ class PatchApplier:
             if self.verbose:
                 print(f"[DEBUG] Could not show file changes: {e}")
     
+    def _validate_patch_format(self, patch_content: str) -> tuple[bool, str]:
+        """Validate that patch has correct unified diff format.
+        
+        Returns:
+            tuple[bool, str]: (is_valid, error_message)
+        """
+        lines = patch_content.split('\n')
+        
+        if not lines:
+            return False, "Patch is empty"
+        
+        # Check if patch has @@ header
+        has_header = False
+        for line in lines:
+            if line.startswith('@@'):
+                has_header = True
+                break
+        
+        if not has_header:
+            return False, "Patch is missing @@ hunk header"
+        
+        # Check that all non-header lines have proper prefix
+        invalid_lines = []
+        for i, line in enumerate(lines, 1):
+            # Skip empty lines and hunk headers
+            if not line or line.startswith('@@') or line.startswith('---') or line.startswith('+++'):
+                continue
+            
+            # Every other line must start with space, +, or -
+            if line[0] not in (' ', '+', '-'):
+                invalid_lines.append((i, line[:60]))  # First 60 chars
+        
+        if invalid_lines:
+            error_msg = "Patch has invalid format - lines without space/+/- prefix:\n"
+            for line_num, line_content in invalid_lines[:5]:  # Show first 5
+                error_msg += f"  Line {line_num}: {repr(line_content)}\n"
+            error_msg += "\n❌ Each line in a unified diff must start with:\n"
+            error_msg += "   - Space (0x20) for context lines (unchanged)\n"
+            error_msg += "   - Plus (+) for added lines\n"
+            error_msg += "   - Minus (-) for removed lines\n"
+            return False, error_msg
+        
+        return True, ""
+    
     def apply_patch(self, file_path: str, patch_content: str, file_hash: Optional[str] = None) -> bool:
         """Apply a unified diff patch to a file."""
         print(f"Applying patch to: {file_path}")
@@ -104,6 +148,17 @@ class PatchApplier:
         if self.verbose:
             print(f"[DEBUG] Raw patch content (repr):")
             print(repr(patch_content))
+        
+        # Validate patch format before attempting to apply
+        print("\n🔍 Validating patch format...")
+        is_valid, error_msg = self._validate_patch_format(patch_content)
+        if not is_valid:
+            print(f"\n❌ PATCH FORMAT ERROR:")
+            print(error_msg)
+            print("\n💡 This patch was generated incorrectly by the AI.")
+            print("   Please re-run the analysis to generate a new patch with correct format.")
+            return False
+        print("✓ Patch format is valid")
         
         # Create a proper unified diff with file headers
         # The patch should already be in unified diff format from analysis
