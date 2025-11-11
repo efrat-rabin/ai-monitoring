@@ -226,7 +226,10 @@ jobs:
           echo "Switching to branch: $PR_BRANCH"
           git checkout "$PR_BRANCH"
           
-          git add .
+          # Only add modified/deleted files (not temporary workflow files)
+          # This excludes: .ai-monitoring/, apply-trigger.json, parent-comment.txt
+          git add -u
+          
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
