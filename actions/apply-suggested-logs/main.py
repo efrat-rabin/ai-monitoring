@@ -398,12 +398,12 @@ def main():
         print(f"\n✓ Successfully applied patch to {file_path}")
         
         # Output commit message for the workflow to use
-        commit_message = issue.get('commit_message')
+        commit_message = parsed_json.get('commit_message')
         
         # Debug: show what we got
-        print(f"[DEBUG] commit_message key exists: {'commit_message' in issue}")
-        print(f"[DEBUG] commit_message value: {repr(commit_message)}")
-        print(f"[DEBUG] commit_message type: {type(commit_message)}")
+        print(f"[DEBUG] commit_message key exists: {'commit_message' in parsed_json}")
+        print(f"[DEBUG] commit_message value: {repr(parsed_json)}")
+        print(f"[DEBUG] commit_message type: {type(parsed_json)}")
         
         if commit_message and commit_message.strip():
             # Set GitHub Actions output
