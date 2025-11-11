@@ -189,8 +189,15 @@ class CursorAnalyzer:
                                     if verbose:
                                         print(f"[DEBUG] Failed to parse extracted JSON: {e}")
                     
-                    print(f"ERROR: Could not extract valid JSON from AI response")
+                    # Fallback: Try to extract JSON using a second AI call
+                    print(f"⚠️  Could not parse JSON from AI response, attempting extraction...")
                     print(f"Response preview: {result[:500]}")
+                    
+                    extracted_result = self._extract_json_with_ai(result, verbose)
+                    if extracted_result:
+                        return extracted_result
+                    
+                    print(f"ERROR: Could not extract valid JSON even after retry")
                     return []
             else:
                 print(f"ERROR: Unexpected result format: {type(result)}")
@@ -202,6 +209,70 @@ class CursorAnalyzer:
             import traceback
             traceback.print_exc()
             return []
+    
+    def _extract_json_with_ai(self, original_response: str, verbose: bool = False) -> Optional[List[Dict[str, Any]]]:
+        """Use AI to extract JSON from a malformed response.
+        
+        Args:
+            original_response: The original AI response containing JSON mixed with other text
+            verbose: Whether to print debug info
+            
+        Returns:
+            Parsed JSON list or None if extraction fails
+        """
+        try:
+            # Load extraction prompt
+            extract_prompt_path = '.ai-monitoring/.github/prompts/extract-json.txt'
+            if not os.path.exists(extract_prompt_path):
+                if verbose:
+                    print(f"[DEBUG] Extract prompt file not found: {extract_prompt_path}")
+                return None
+            
+            with open(extract_prompt_path, 'r') as f:
+                extract_prompt = f.read()
+            
+            # Replace placeholder with original response
+            extract_prompt = extract_prompt.replace('{original_response}', original_response[:10000])  # Limit size
+            
+            if verbose:
+                print(f"[DEBUG] Sending extraction request to AI")
+                print(f"[DEBUG] Extraction prompt length: {len(extract_prompt)} chars")
+            
+            # Send extraction request
+            result = self.cursor_client.send_message(extract_prompt, context="", verbose=verbose)
+            
+            if verbose:
+                print(f"[DEBUG] Extraction result type: {type(result)}")
+                print(f"[DEBUG] Extraction result preview: {str(result)[:200]}")
+            
+            # Try to parse the extracted result
+            if isinstance(result, str):
+                # Remove any markdown code blocks
+                result = result.strip()
+                if result.startswith('```'):
+                    result = result.split('\n', 1)[1] if '\n' in result else result
+                if result.endswith('```'):
+                    result = result.rsplit('\n', 1)[0] if '\n' in result else result
+                result = result.strip()
+                
+                # Try to parse as JSON
+                try:
+                    parsed = json.loads(result)
+                    if isinstance(parsed, list):
+                        print(f"✓ Successfully extracted JSON array with {len(parsed)} items")
+                        return parsed
+                except json.JSONDecodeError:
+                    if verbose:
+                        print(f"[DEBUG] Extraction result is not valid JSON")
+            
+            return None
+            
+        except Exception as e:
+            if verbose:
+                print(f"[DEBUG] Error during JSON extraction: {e}")
+                import traceback
+                traceback.print_exc()
+            return None
     
     def _generate_mock_results(self, file_paths: List[str]) -> List[Dict[str, Any]]:
         """Generate mock analysis results for testing."""

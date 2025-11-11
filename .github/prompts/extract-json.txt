@@ -1,0 +1,43 @@
+Your previous response contained explanatory text before or after the JSON array.
+
+Extract ONLY the JSON array from the response below.
+
+Rules:
+- Return ONLY the JSON array
+- First character must be [
+- Last character must be ]
+- Remove any text before the [
+- Remove any text after the ]
+- Do NOT add any explanations
+- Do NOT add markdown code blocks
+- Just the pure JSON array
+
+Original response:
+---
+{original_response}
+---
+
+Expected JSON format:
+[
+  {
+    "file": "path/to/file.ts",
+    "analysis": {
+      "issues": [
+        {
+          "severity": "CRITICAL|HIGH|MEDIUM|LOW",
+          "category": "missing-logs|correlation-id|performance-metrics|error-context|structured-logging|business-metrics|kafka-monitoring|database-monitoring",
+          "line": <line_number>,
+          "method": "method or function name",
+          "description": "What log statement is missing and why",
+          "recommendation": "PURE CODE ONLY - exact code to add",
+          "patch": "Unified diff patch in standard format",
+          "impact": "Impact on debugging/monitoring if not added"
+        }
+      ],
+      "summary": "Overall assessment"
+    }
+  }
+]
+
+Extract and return ONLY the JSON array in this exact format (start with [ and end with ]):
+
