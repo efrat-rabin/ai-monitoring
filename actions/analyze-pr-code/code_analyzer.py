@@ -148,8 +148,9 @@ class CursorAnalyzer:
                     print(f"[DEBUG] Got string result, length: {len(result)} chars")
                 
                 # Try to parse string as JSON
+                result_stripped = result.strip()
                 try:
-                    parsed = json.loads(result)
+                    parsed = json.loads(result_stripped)
                     if isinstance(parsed, list):
                         if verbose:
                             print(f"[DEBUG] Parsed string as list with {len(parsed)} items")
@@ -165,11 +166,11 @@ class CursorAnalyzer:
                     # Extract JSON array from text (AI often adds explanatory text despite instructions)
                     import re
                     # Find JSON array starting with [ and ending with ]
-                    json_match = re.search(r'\[\s*\{', result)
+                    json_match = re.search(r'\[\s*\{', result_stripped)
                     if json_match:
                         start_pos = json_match.start()
                         # Extract from first [ to end
-                        json_str = result[start_pos:]
+                        json_str = result_stripped[start_pos:]
                         
                         # Try to parse the extracted JSON
                         try:
@@ -207,15 +208,35 @@ class CursorAnalyzer:
                                     if verbose:
                                         print(f"[DEBUG] Failed to parse extracted JSON: {e}")
                     
-                    # Fallback: Try to extract JSON using a second AI call
-                    print(f"⚠️  Could not parse JSON from AI response, attempting extraction...")
-                    print(f"Response preview: {result[:500]}")
+                    # Last attempt: Look for largest valid JSON array
+                    if verbose:
+                        print(f"[DEBUG] Attempting aggressive JSON extraction...")
                     
-                    extracted_result = self._extract_json_with_ai(result, verbose)
+                    # Try to find and extract the largest possible JSON array
+                    for i in range(len(result_stripped)):
+                        if result_stripped[i] == '[':
+                            for j in range(len(result_stripped) - 1, i, -1):
+                                if result_stripped[j] == ']':
+                                    try:
+                                        json_str = result_stripped[i:j+1]
+                                        parsed = json.loads(json_str)
+                                        if isinstance(parsed, list) and len(parsed) > 0:
+                                            if verbose:
+                                                print(f"[DEBUG] Aggressively extracted JSON array with {len(parsed)} items")
+                                            return parsed
+                                    except json.JSONDecodeError:
+                                        continue
+                    
+                    # Final fallback: Try to extract JSON using a second AI call
+                    print(f"⚠️  Could not parse JSON from AI response, attempting AI extraction...")
+                    print(f"Response preview: {result_stripped[:500]}")
+                    
+                    extracted_result = self._extract_json_with_ai(result_stripped, verbose)
                     if extracted_result:
                         return extracted_result
                     
                     print(f"ERROR: Could not extract valid JSON even after retry")
+                    print(f"Full response length: {len(result_stripped)} chars")
                     return []
             else:
                 print(f"ERROR: Unexpected result format: {type(result)}")
