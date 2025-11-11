@@ -37,8 +37,9 @@ CRITICAL: Every line in the patch MUST start with space, -, or +. NO lines witho
 7. **Missing Logs**: Critical operations without logging
 
 ## JSON Output Format:
-Return a JSON array with this EXACT structure:
+Return a JSON array with this EXACT structure. DO NOT return a flat array of issues!
 
+CORRECT STRUCTURE (with file and analysis wrapper):
 ```json
 [
   {
@@ -62,6 +63,14 @@ Return a JSON array with this EXACT structure:
 ]
 ```
 
+WRONG - DO NOT return this flat structure:
+```json
+[
+  { "severity": "CRITICAL", "line": 10, ... },
+  { "severity": "HIGH", "line": 20, ... }
+]
+```
+
 ## Important Requirements:
 - **patch**: MUST be in proper git diff format with `+`, `-`, and space prefixes
 - **recommendation**: Should be the exact new code to use
@@ -76,4 +85,8 @@ Return a JSON array with this EXACT structure:
 
 Analyze all provided files and return the complete JSON array. Ensure all patches use proper git diff format!
 
-REMEMBER: Return ONLY the JSON array. No other text. Start with [ and end with ].
+CRITICAL REQUIREMENTS:
+1. Return ONLY the JSON array. No other text. Start with [ and end with ].
+2. Each element MUST have "file" and "analysis" fields
+3. The "analysis" field MUST have "issues" array and "summary" string
+4. DO NOT return a flat array of issues!
