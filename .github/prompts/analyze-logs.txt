@@ -82,18 +82,20 @@ Please provide:
    - The "patch" field MUST contain a unified diff in standard patch format
    - Include 3 lines of context before and after the change
    - Use proper unified diff format with @@ hunk headers
-   - Lines to remove start with - (minus)
-   - Lines to add start with + (plus)
-   - Context lines have no prefix (just a space)
+   - Lines to remove start with - (minus) at column 1
+   - Lines to add start with + (plus) at column 1
+   - Context lines start with a space at column 1
+   - NO INDENTATION before the +, -, or space prefix
    - Example format:
      @@ -42,5 +42,7 @@
-        try {
-          data = await fetch();
-     +  } catch (error) {
-     +    logger.error('Fetch failed', { error });
-        }
-        return data;
+      try {
+        data = await fetch();
++} catch (error) {
++  logger.error('Fetch failed', { error });
+      }
+      return data;
    - The patch must be ready to apply with 'git apply' command
+   - CRITICAL: The +, -, and space must be in column 1, NOT indented
 
 4. Impact on debugging/monitoring if the log remains missing
 

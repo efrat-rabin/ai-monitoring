@@ -95,9 +95,15 @@ class PatchApplier:
                 print(f"Please re-run analysis on the updated code.")
                 return False
         
+        # Always show patch content for debugging
+        print(f"\n📝 Patch content from analysis:")
+        print("=" * 60)
+        print(patch_content)
+        print("=" * 60)
+        
         if self.verbose:
-            print(f"[DEBUG] Patch content:")
-            print(patch_content)
+            print(f"[DEBUG] Raw patch content (repr):")
+            print(repr(patch_content))
         
         # Create a proper unified diff with file headers
         # The patch should already be in unified diff format from analysis
@@ -106,10 +112,14 @@ class PatchApplier:
         # If patch doesn't have file headers, add them
         if not patch_content.startswith('---'):
             full_patch = f"--- a/{file_path}\n+++ b/{file_path}\n{patch_content}"
+            print(f"\n📋 Full patch with headers:")
+            print("=" * 60)
+            print(full_patch)
+            print("=" * 60)
         
         if self.verbose:
-            print(f"[DEBUG] Full patch with headers:")
-            print(full_patch)
+            print(f"[DEBUG] Full patch (repr):")
+            print(repr(full_patch))
         
         # Write patch to temporary file
         with tempfile.NamedTemporaryFile(mode='w', suffix='.patch', delete=False) as tmp:
