@@ -1,0 +1,38 @@
+title: K8s Pod Crash Looping
+display:
+  header: K8s Pod Crash Looping
+  description: Kubernetes pod is on a CrashLoopBackOff for more than 5 minutes
+  resourceHeaderLabels: []
+  contextHeaderLabels:
+    - cluster
+    - namespace
+    - workload
+    - pod
+severity: S2
+model:
+  queries:
+    - name: threshold_input_query
+      expression: avg(groundcover_kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff"}) by (cluster, namespace, workload, env, pod)
+      datasourceType: prometheus
+      queryType: instant
+      rollup:
+        function: avg
+        time: 5m
+  thresholds:
+    - name: threshold_1
+      inputName: threshold_input_query
+      operator: gt
+      values:
+        - 0
+labels:
+  team: SRE
+annotations:
+  slack-webhook-alert: enabled
+  workflow_route_opsgenie_opsgenie: enabled
+executionErrorState: OK
+noDataState: OK
+evaluationInterval:
+  interval: 5m
+  pendingFor: 5m
+measurementType: state
+
