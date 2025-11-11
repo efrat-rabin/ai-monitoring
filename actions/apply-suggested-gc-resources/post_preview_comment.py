@@ -32,44 +32,44 @@ def post_preview_comment(github_token: str, repository: str, pr_number: int,
     eval_interval = monitor['evaluationInterval']['interval']
     pending_for = monitor['evaluationInterval']['pendingFor']
     
-    # Build HTML comment (GroundCover style)
-    comment_body = f"""<div style="border: 1px solid #e1e4e8; border-radius: 6px; padding: 16px; background: #ffffff;">
+    # Build HTML comment (GroundCover style - exact match)
+    comment_body = f"""<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; border: 1px solid #d0d7de; border-radius: 6px; padding: 20px; background: #ffffff; color: #1f2328;">
   
-  <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-    <h3 style="margin: 0; font-size: 18px; font-weight: 600;">{title}</h3>
-    <span style="background: #dc3545; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">Alerting</span>
+  <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+    <h2 style="margin: 0; font-size: 20px; font-weight: 600; color: #1f2328;">{title}</h2>
+    <span style="background: #d1242f; color: #ffffff; padding: 2px 10px; border-radius: 3px; font-size: 13px; font-weight: 500;">Alerting</span>
   </div>
   
-  <div style="display: flex; gap: 16px; margin-bottom: 12px; font-size: 14px; color: #586069;">
-    <span><strong>Monitor type:</strong> {monitor_type}</span>
-    <span><strong>Severity:</strong> {severity}</span>
+  <div style="display: flex; gap: 24px; margin-bottom: 24px; font-size: 14px; color: #656d76;">
+    <div><span style="font-weight: 400;">Monitor type:</span> <span style="color: #1f2328; font-weight: 400;">{monitor_type}</span></div>
+    <div><span style="font-weight: 400;">Severity:</span> <span style="color: #1f2328; font-weight: 600;">{severity}</span></div>
   </div>
   
-  <div style="margin-bottom: 16px;">
-    <h4 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #24292e;">Description</h4>
-    <p style="margin: 0; color: #586069; font-size: 14px;">{description}</p>
+  <div style="margin-bottom: 24px;">
+    <div style="margin-bottom: 8px; font-size: 14px; font-weight: 600; color: #1f2328;">Description</div>
+    <div style="font-size: 14px; color: #656d76; line-height: 1.5;">{description}</div>
   </div>
   
-  <div style="margin-bottom: 16px;">
-    <h4 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #24292e;">Query</h4>
-    <pre style="background: #f6f8fa; padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 12px; margin: 0;"><code>{query_expr}</code></pre>
+  <div style="margin-bottom: 24px;">
+    <div style="margin-bottom: 8px; font-size: 14px; font-weight: 600; color: #1f2328;">Query</div>
+    <pre style="background: #f6f8fa; padding: 14px; border-radius: 6px; border: 1px solid #d0d7de; overflow-x: auto; font-size: 12px; font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace; margin: 0; color: #1f2328; line-height: 1.6;"><code>{query_expr}</code></pre>
   </div>
   
-  <div style="background: #f6f8fa; padding: 12px; border-radius: 4px; font-size: 13px;">
-    <div style="margin-bottom: 4px;"><strong>Threshold:</strong> {operator_symbol} {threshold_value}</div>
-    <div style="margin-bottom: 4px;"><strong>Evaluation Interval:</strong> {eval_interval}</div>
-    <div><strong>Pending For:</strong> {pending_for}</div>
+  <div style="background: #f6f8fa; padding: 16px; border-radius: 6px; border: 1px solid #d0d7de; font-size: 14px; color: #1f2328;">
+    <div style="margin-bottom: 6px;"><span style="font-weight: 600;">Threshold:</span> {operator_symbol} {threshold_value}</div>
+    <div style="margin-bottom: 6px;"><span style="font-weight: 600;">Evaluation Interval:</span> {eval_interval}</div>
+    <div><span style="font-weight: 600;">Pending For:</span> {pending_for}</div>
   </div>
   
-  <hr style="margin: 16px 0; border: none; border-top: 1px solid #e1e4e8;">
+  <hr style="margin: 20px 0; border: none; border-top: 1px solid #d0d7de;">
   
-  <div style="text-align: center; color: #586069; font-size: 14px;">
-    Reply with <code>/create-monitor</code> to create it.
+  <div style="text-align: center; color: #656d76; font-size: 14px;">
+    Reply with <code style="background: #f6f8fa; padding: 3px 6px; border-radius: 3px; font-size: 12px; color: #1f2328; border: 1px solid #d0d7de;">/create-monitor</code> to create it.
   </div>
   
 </div>
 
-<p style="margin-top: 8px; font-size: 12px; color: #6a737d; font-style: italic;">Preview by AI automation 🤖</p>"""
+<p style="margin-top: 12px; font-size: 12px; color: #656d76; font-style: italic; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;">Preview by AI automation 🤖</p>"""
     
     # Use PR review comments API
     url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/comments"
