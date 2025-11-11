@@ -40,7 +40,11 @@ permissions:
 jobs:
   # Analyze when PR is opened/updated
   analyze:
-    if: github.event_name == 'pull_request'
+    if: |
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      !startsWith(github.event.head_commit.message, '🤖') &&
+      github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Get PR info

@@ -397,13 +397,24 @@ def main():
     if applier.apply_patch(file_path, patch_content, file_hash):
         print(f"\n✓ Successfully applied patch to {file_path}")
         
-        # Write commit message from analysis if provided
-        commit_message = issue.get('commit_message')
+        # Output commit message for the workflow to use
+        commit_message = issue.get('commit_message', '')
+        if verbose:
+            print(f"[DEBUG] Commit message from issue: {repr(commit_message)}")
+        
         if commit_message:
-            commit_msg_file = 'commit-message.txt'
-            with open(commit_msg_file, 'w') as f:
-                f.write(commit_message)
-            print(f"✓ Commit message written to {commit_msg_file}")
+            # Set GitHub Actions output
+            github_output = os.getenv('GITHUB_OUTPUT')
+            if github_output:
+                # Escape newlines and special characters for GitHub Actions output
+                escaped_message = commit_message.replace('%', '%25').replace('\n', '%0A').replace('\r', '%0D')
+                with open(github_output, 'a') as f:
+                    f.write(f"commit_message={escaped_message}\n")
+                print(f"✓ Commit message set as output: {commit_message}")
+            else:
+                print(f"⚠️  GITHUB_OUTPUT not available, commit message not set")
+        else:
+            print(f"⚠️  No commit_message in issue metadata")
         
         if verbose:
             print(f"[DEBUG] Successfully completed apply-suggested-logs/main.py")
