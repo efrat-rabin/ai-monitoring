@@ -6,7 +6,7 @@
         {
           "severity": "HIGH",
           "category": "missing-logs",
-          "line": 31,
+          "line": 25,
           "method": "processBatch",
           "description": "Missing error log when batch processing fails. When formatEntity returns false, the failure is silently propagated without logging which entity caused the failure.",
           "recommendation": "logger.error('batch_failed', { entityId: entity.id, batchSize: batch.length });",
@@ -16,7 +16,7 @@
         {
           "severity": "CRITICAL",
           "category": "missing-logs",
-          "line": 32,
+          "line": 39,
           "method": "processBatch",
           "description": "Missing error log when individual entity formatting fails. The failure is returned without any context about which entity failed or why.",
           "recommendation": "logger.error('entity_failed', { entityId: entity.id, error: 'formatEntity returned false' });",
@@ -26,7 +26,7 @@
         {
           "severity": "MEDIUM",
           "category": "missing-logs",
-          "line": 35,
+          "line": 30,
           "method": "processBatch",
           "description": "Missing success log after processing a batch. No visibility into batch processing progress or throughput metrics.",
           "recommendation": "logger.info('processed_batch', { entitiesProcessed: batch.length });",
@@ -36,7 +36,7 @@
         {
           "severity": "MEDIUM",
           "category": "missing-logs",
-          "line": 25,
+          "line": 32,
           "method": "process",
           "description": "Missing completion log after all batches are processed. No visibility into total entities processed or overall processing success.",
           "recommendation": "logger.info('completed_processing', { totalEntities: skip });",
