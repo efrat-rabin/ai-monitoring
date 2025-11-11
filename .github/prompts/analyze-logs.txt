@@ -78,6 +78,23 @@ Please provide:
    - Example GOOD: logger.error('user_deletion_failed', { userId, error: error.message });
    - Example BAD: Add error logging before re-throwing: logger.error(...)
 
+4. UNIFIED DIFF PATCH (REQUIRED):
+   - The "patch" field MUST contain a unified diff in standard patch format
+   - Include 3 lines of context before and after the change
+   - Use proper unified diff format with @@ hunk headers
+   - Lines to remove start with - (minus)
+   - Lines to add start with + (plus)
+   - Context lines have no prefix (just a space)
+   - Example format:
+     @@ -42,5 +42,7 @@
+        try {
+          data = await fetch();
+     +  } catch (error) {
+     +    logger.error('Fetch failed', { error });
+        }
+        return data;
+   - The patch must be ready to apply with 'git apply' command
+
 4. Impact on debugging/monitoring if the log remains missing
 
 IMPORTANT: Limit your analysis to the TOP 5 MOST CRITICAL issues only per file. Focus on the most impactful missing logs.
@@ -125,6 +142,7 @@ Return format (this is the ONLY valid format):
           "method": "method or function name where log is missing",
           "description": "What log statement is missing and why it's needed",
           "recommendation": "PURE CODE ONLY - the exact code to add (no explanatory text, no 'Add this', no descriptions, just the raw code)",
+          "patch": "Unified diff patch in standard format with @@ headers, ready to apply with git apply",
           "impact": "Impact on debugging/monitoring/compliance if not added"
         }
       ],

@@ -1,156 +1,121 @@
 #!/usr/bin/env python3
 """
-Apply Suggested Logs Action
+Apply Suggested Logs Action - Patch-based approach
 """
 
 import os
 import sys
 import argparse
 import json
-import re
+import hashlib
+import subprocess
+import tempfile
 from pathlib import Path
-from typing import List, Dict, Any, Optional
-
-# Add libs directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "libs"))
-from cursor_client import CursorClient
+from typing import Dict, Any, Optional
 
 
-class LogApplier:
-    """Applies logging improvements to files using AI."""
+class PatchApplier:
+    """Applies logging improvements using unified diffs."""
     
-    def __init__(self, cursor_api_key: str, prompt_file: str = '.github/prompts/apply-logs.txt', verbose: bool = False):
-        self.cursor_client = CursorClient(api_key=cursor_api_key)
-        self.cursor_client.install_cursor_cli()
+    def __init__(self, verbose: bool = False):
         self.verbose = verbose
         
-        # Load prompt template
-        with open(prompt_file, 'r') as f:
-            self.prompt_template = f.read()
+        if self.verbose:
+            print(f"[DEBUG] PatchApplier initialized")
+    
+    def verify_file_unchanged(self, file_path: str, expected_hash: str) -> bool:
+        """Verify file hasn't changed since analysis."""
+        if not os.path.exists(file_path):
+            return False
+        
+        with open(file_path, 'rb') as f:
+            current_hash = hashlib.sha256(f.read()).hexdigest()
         
         if self.verbose:
-            print(f"[DEBUG] LogApplier initialized")
-            print(f"[DEBUG] Prompt template length: {len(self.prompt_template)} chars")
+            print(f"[DEBUG] File hash verification:")
+            print(f"  Expected: {expected_hash}")
+            print(f"  Current:  {current_hash}")
+            print(f"  Match: {current_hash == expected_hash}")
+        
+        return current_hash == expected_hash
     
-    def apply_logging_improvements(self, file_path: str, issues: List[Dict[str, Any]]) -> bool:
-        """Apply logging improvements to a file."""
-        print(f"Applying improvements to: {file_path}")
+    def apply_patch(self, file_path: str, patch_content: str, file_hash: Optional[str] = None) -> bool:
+        """Apply a unified diff patch to a file."""
+        print(f"Applying patch to: {file_path}")
         
         if not os.path.exists(file_path):
-            print(f"File not found: {file_path}")
+            print(f"ERROR: File not found: {file_path}")
             return False
         
-        # Read current file content
-        with open(file_path, 'r') as f:
-            original_content = f.read()
+        # Verify file hasn't changed if hash provided
+        if file_hash:
+            if not self.verify_file_unchanged(file_path, file_hash):
+                print(f"ERROR: File has been modified since analysis.")
+                print(f"Please re-run analysis on the updated code.")
+                return False
         
         if self.verbose:
-            print(f"[DEBUG] Original file size: {len(original_content)} chars")
-            print(f"[DEBUG] Number of issues to apply: {len(issues)}")
+            print(f"[DEBUG] Patch content:")
+            print(patch_content)
         
-        # Build prompt with issues
-        issues_text = ""
-        for idx, issue in enumerate(issues, 1):
-            issues_text += f"\n{idx}. **{issue.get('severity', 'MEDIUM')}** - {issue.get('category', 'logging')}\n"
-            issues_text += f"   Line: {issue.get('line', 'N/A')}\n"
-            issues_text += f"   Method: {issue.get('method', 'N/A')}\n"
-            issues_text += f"   Description: {issue.get('description', 'N/A')}\n"
-            issues_text += f"   Recommendation: {issue.get('recommendation', 'N/A')}\n"
+        # Create a proper unified diff with file headers
+        # The patch should already be in unified diff format from analysis
+        full_patch = patch_content
+        
+        # If patch doesn't have file headers, add them
+        if not patch_content.startswith('---'):
+            full_patch = f"--- a/{file_path}\n+++ b/{file_path}\n{patch_content}"
+        
+        if self.verbose:
+            print(f"[DEBUG] Full patch with headers:")
+            print(full_patch)
+        
+        # Write patch to temporary file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.patch', delete=False) as tmp:
+            tmp.write(full_patch)
+            tmp_patch_file = tmp.name
+        
+        try:
+            # Try to apply patch using git apply
+            result = subprocess.run(
+                ['git', 'apply', '--verbose', tmp_patch_file],
+                capture_output=True,
+                text=True,
+                cwd=os.path.dirname(file_path) or '.'
+            )
             
             if self.verbose:
-                print(f"[DEBUG] Issue {idx}: {issue.get('severity')} at line {issue.get('line')} in {issue.get('method')}")
-        
-        prompt = self.prompt_template.replace('{issues}', issues_text)
-        context = f"File: {file_path}\n\nCurrent content:\n{original_content}"
-        
-        if self.verbose:
-            print(f"[DEBUG] Prompt length: {len(prompt)} chars")
-            print(f"[DEBUG] Context length: {len(context)} chars")
-            print(f"[DEBUG] Calling Cursor AI...")
-        
-        # Get improved code from AI
-        result = self.cursor_client.send_message(prompt, context=context, verbose=self.verbose)
-        
-        if self.verbose:
-            print(f"[DEBUG] AI result type: {type(result)}")
-            print(f"[DEBUG] AI result preview: {str(result)[:300]}...")
-        
-        improved_code = self._extract_code(result)
-        
-        if self.verbose:
-            if improved_code:
-                print(f"[DEBUG] Extracted code length: {len(improved_code)} chars")
-                print(f"[DEBUG] Code comparison:")
-                print(f"  Original: {len(original_content)} chars")
-                print(f"  Improved: {len(improved_code)} chars")
-                print(f"  Same content: {improved_code == original_content}")
+                print(f"[DEBUG] git apply result:")
+                print(f"  Return code: {result.returncode}")
+                print(f"  Stdout: {result.stdout}")
+                print(f"  Stderr: {result.stderr}")
+            
+            if result.returncode == 0:
+                print(f"✓ Patch applied successfully to {file_path}")
+                return True
             else:
-                print(f"[DEBUG] No code extracted from AI response")
-        
-        if not improved_code or improved_code == original_content:
-            print(f"No changes for {file_path}")
+                print(f"ERROR: Failed to apply patch to {file_path}")
+                print(f"Git apply error: {result.stderr}")
+                
+                # Try to extract line number from error
+                if "does not match" in result.stderr or "does not apply" in result.stderr:
+                    print("This usually means the code context has changed.")
+                    print("Please re-run analysis to generate updated patches.")
+                
+                return False
+                
+        except FileNotFoundError:
+            print("ERROR: git command not found. Please ensure git is installed.")
             return False
-        
-        print(f"✓ Applied changes to {file_path}")
-        return True
-    
-    def _extract_code(self, result: Any) -> Optional[str]:
-        """Extract code from AI result."""
-        if self.verbose:
-            print(f"[DEBUG] _extract_code called with type: {type(result)}")
-        
-        if isinstance(result, str):
-            code = result
-            
-            if self.verbose:
-                print(f"[DEBUG] Processing string result, length: {len(code)} chars")
-            
-            # Remove markdown code blocks
-            python_block = re.search(r'```python\s*\n(.*?)\n```', code, re.DOTALL)
-            if python_block:
-                if self.verbose:
-                    print(f"[DEBUG] Found Python markdown block")
-                code = python_block.group(1)
-            else:
-                generic_block = re.search(r'```\s*\n(.*?)\n```', code, re.DOTALL)
-                if generic_block:
-                    if self.verbose:
-                        print(f"[DEBUG] Found generic markdown block")
-                    code = generic_block.group(1)
-                elif self.verbose:
-                    print(f"[DEBUG] No markdown blocks found, using raw string")
-            
-            code = code.strip()
-            if 'import ' in code or 'def ' in code or 'class ' in code:
-                if self.verbose:
-                    print(f"[DEBUG] Code validated (contains Python keywords)")
-                return code
-            elif self.verbose:
-                print(f"[DEBUG] Code rejected (no Python keywords found)")
-        
-        elif isinstance(result, dict):
-            if self.verbose:
-                print(f"[DEBUG] Processing dict result with keys: {list(result.keys())}")
-            
-            if 'code' in result:
-                if self.verbose:
-                    print(f"[DEBUG] Found 'code' key in dict")
-                return result['code']
-            elif 'result' in result:
-                if self.verbose:
-                    print(f"[DEBUG] Found 'result' key, recursing...")
-                return self._extract_code(result['result'])
-            elif 'improved_code' in result:
-                if self.verbose:
-                    print(f"[DEBUG] Found 'improved_code' key in dict")
-                return result['improved_code']
-            elif self.verbose:
-                print(f"[DEBUG] No recognized keys found in dict")
-        
-        if self.verbose:
-            print(f"[DEBUG] No code could be extracted")
-        
-        return None
+        except Exception as e:
+            print(f"ERROR: Exception while applying patch: {e}")
+            return False
+        finally:
+            # Clean up temporary patch file
+            try:
+                os.unlink(tmp_patch_file)
+            except:
+                pass
 
    
 def parse_issue_from_comment(comment_body: str) -> Optional[Dict[str, Any]]:
@@ -166,15 +131,26 @@ def parse_issue_from_comment(comment_body: str) -> Optional[Dict[str, Any]]:
     
     try:
         metadata = json.loads(json_match.group(1))
+        
+        # Validate required fields
+        if 'file' not in metadata:
+            print("ERROR: Missing 'file' field in metadata")
+            return None
+        
+        if 'patch' not in metadata:
+            print("ERROR: Missing 'patch' field in metadata")
+            print("This workflow requires analysis to generate unified diff patches.")
+            return None
+        
         return {
             'file': metadata['file'],
+            'patch': metadata['patch'],
+            'file_hash': metadata.get('file_hash'),
             'severity': metadata.get('severity', 'MEDIUM'),
             'category': metadata.get('category', 'logging'),
             'method': metadata.get('method', 'N/A'),
             'line': metadata.get('line', 0),
             'description': metadata.get('description', ''),
-            'recommendation': metadata.get('recommendation', ''),
-            'impact': metadata.get('impact', '')
         }
     except (json.JSONDecodeError, KeyError) as e:
         print(f"⚠️  Failed to parse JSON metadata: {e}")
@@ -182,7 +158,7 @@ def parse_issue_from_comment(comment_body: str) -> Optional[Dict[str, Any]]:
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Apply suggested logs from review comment')
+    parser = argparse.ArgumentParser(description='Apply suggested logs from review comment using patches')
     parser.add_argument('--pr-number', type=str, required=True)
     parser.add_argument('--repository', type=str, required=True)
     parser.add_argument('--comment-body', type=str,
@@ -190,8 +166,6 @@ def main():
     parser.add_argument('--comment-body-file', type=str,
                        help='File containing review comment body')
     parser.add_argument('--comment-id', type=str)
-    parser.add_argument('--prompt-file', type=str, 
-                       default='.github/prompts/apply-logs.txt')
     
     args = parser.parse_args()
     
@@ -199,11 +173,10 @@ def main():
     verbose = os.getenv('ACTIONS_STEP_DEBUG', 'false').lower() in ('true', '1')
     
     if verbose:
-        print(f"[DEBUG] Running apply-suggested-logs/main.py with verbose mode")
+        print(f"[DEBUG] Running apply-suggested-logs/main.py (patch-based) with verbose mode")
         print(f"[DEBUG] PR Number: {args.pr_number}")
         print(f"[DEBUG] Repository: {args.repository}")
         print(f"[DEBUG] Comment ID: {args.comment_id}")
-        print(f"[DEBUG] Prompt file: {args.prompt_file}")
     
     # Get comment body from file or argument
     if args.comment_body_file:
@@ -221,16 +194,8 @@ def main():
         print("ERROR: Either --comment-body or --comment-body-file is required")
         return 1
     
-    cursor_api_key = os.getenv('CURSOR_API_KEY')
-    if not cursor_api_key:
-        print("ERROR: CURSOR_API_KEY not set")
-        return 1
-    
-    if verbose:
-        print(f"[DEBUG] CURSOR_API_KEY present: True")
-    
     # Initialize applier
-    applier = LogApplier(cursor_api_key, args.prompt_file, verbose=verbose)
+    applier = PatchApplier(verbose=verbose)
     
     # Parse issue from comment body
     print("Parsing issue from comment...")
@@ -238,25 +203,28 @@ def main():
     
     if not issue:
         print("ERROR: Could not parse issue from comment")
-        print("Make sure the comment includes hidden JSON metadata: <!-- ISSUE_DATA: {...} -->")
+        print("Make sure the comment includes hidden JSON metadata with 'patch' field: <!-- ISSUE_DATA: {...} -->")
         return 1
     
     if verbose:
-        print(f"[DEBUG] Parsed issue: {json.dumps(issue, indent=2)}")
+        print(f"[DEBUG] Parsed issue: {json.dumps({k: v for k, v in issue.items() if k != 'patch'}, indent=2)}")
+        print(f"[DEBUG] Patch present: {bool(issue.get('patch'))}")
     
-    file_path = issue.pop('file')
-    print(f"Applying single issue to {file_path}")
+    file_path = issue['file']
+    patch_content = issue['patch']
+    file_hash = issue.get('file_hash')
     
-    if applier.apply_logging_improvements(file_path, [issue]):
-        print(f"\n✓ Applied change to {file_path}")
+    print(f"Applying patch to {file_path}")
+    
+    if applier.apply_patch(file_path, patch_content, file_hash):
+        print(f"\n✓ Successfully applied patch to {file_path}")
         if verbose:
             print(f"[DEBUG] Successfully completed apply-suggested-logs/main.py")
         return 0
     else:
-        print(f"\n✗ Failed to apply change")
+        print(f"\n✗ Failed to apply patch")
         return 1
 
 
 if __name__ == '__main__':
     sys.exit(main())
-
