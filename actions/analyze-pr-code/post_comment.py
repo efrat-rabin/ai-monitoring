@@ -100,6 +100,55 @@ def post_issue_comment(
         return False
 
 
+def get_pr_changed_lines(
+    github_token: str,
+    repository: str,
+    pr_number: int
+) -> Dict[str, set]:
+    """Get a map of file paths to their changed line numbers."""
+    owner, repo = repository.split("/")
+    url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/files"
+    
+    headers = {
+        "Authorization": f"Bearer {github_token}",
+        "Accept": "application/vnd.github+json",
+    }
+    
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        files = response.json()
+        
+        changed_lines = {}
+        for file_data in files:
+            filename = file_data.get("filename")
+            patch = file_data.get("patch", "")
+            
+            # Parse the patch to get changed line numbers
+            lines = set()
+            current_line = 0
+            
+            for line in patch.split('\n'):
+                if line.startswith('@@'):
+                    # Extract the starting line number from hunk header
+                    # Format: @@ -1,4 +1,5 @@
+                    parts = line.split('+')[1].split('@@')[0].strip()
+                    current_line = int(parts.split(',')[0]) if ',' in parts else int(parts)
+                elif not line.startswith('-'):
+                    # This is either a context line or an addition
+                    if current_line > 0:
+                        lines.add(current_line)
+                    current_line += 1
+            
+            if lines:
+                changed_lines[filename] = lines
+        
+        return changed_lines
+    except Exception as e:
+        print(f"Warning: Could not fetch PR diff: {e}")
+        return {}
+
+
 def post_review_comment(
     github_token: str,
     repository: str,
@@ -117,7 +166,7 @@ def post_review_comment(
         "Authorization": f"Bearer {github_token}",
         "Accept": "application/vnd.github+json",
     }
-    # test
+    
     payload = {
         "body": comment_body,
         "commit_id": commit_sha,
@@ -163,6 +212,11 @@ def main():
     
     pr_number = int(args.pr_number)
     
+    # Get changed lines from PR diff
+    print("Fetching PR diff...")
+    changed_lines = get_pr_changed_lines(github_token, args.repository, pr_number)
+    print(f"Found {len(changed_lines)} changed file(s)")
+    
     # Post summary comment first
     print("Posting summary comment...")
     summary = format_summary_comment(results)
@@ -172,15 +226,26 @@ def main():
     
     # Post review comments on specific lines
     total_comments = 0
+    skipped_not_in_diff = 0
+    
     for result in results:
         file_path = result.get("file")
         analysis = result.get("analysis", {})
         issues = analysis.get("issues", [])
         
+        # Get changed lines for this file
+        file_changed_lines = changed_lines.get(file_path, set())
+        
         for issue in issues:
             line = issue.get("line")
             if not line or line == "N/A":
                 print(f"Skipping {file_path} - no line number")
+                continue
+            
+            # Check if the line is in the PR diff
+            if file_changed_lines and line not in file_changed_lines:
+                print(f"Skipping {file_path}:{line} - line not in PR diff")
+                skipped_not_in_diff += 1
                 continue
             
             method = issue.get("method", "N/A")
@@ -199,7 +264,10 @@ def main():
             ):
                 total_comments += 1
     
-    print(f"\n✅ Posted {total_comments} review comment(s) + 1 summary")
+    if skipped_not_in_diff > 0:
+        print(f"\n⚠️ Skipped {skipped_not_in_diff} issue(s) not in PR diff")
+    
+    print(f"✅ Posted {total_comments} review comment(s) + 1 summary")
     return 0
 
 
