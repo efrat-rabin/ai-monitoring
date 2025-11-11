@@ -101,8 +101,26 @@ class PatchApplier:
         if not has_header:
             return False, "Patch is missing @@ hunk header"
         
-        # Basic format check: after @@, lines should start with space/+/-
-        # But this is just informational - the diagnostic output above will show the real issue
+        # Check for identical +/- pairs (no-op changes that corrupt patches)
+        # This happens when AI removes and adds the exact same line
+        i = 0
+        while i < len(lines) - 1:
+            if lines[i].startswith('-') and lines[i+1].startswith('+'):
+                # Check if the content after the prefix is identical
+                removed_content = lines[i][1:]  # Everything after the -
+                added_content = lines[i+1][1:]   # Everything after the +
+                
+                if removed_content == added_content:
+                    return False, (
+                        f"Patch contains no-op change at lines {i+1}-{i+2}:\n"
+                        f"  Removes: {repr(lines[i][:60])}\n"
+                        f"  Adds:    {repr(lines[i+1][:60])}\n"
+                        f"\n❌ These lines are identical! This creates a corrupt patch.\n"
+                        f"💡 The AI generated a patch that removes and re-adds the same line.\n"
+                        f"   Please re-run analysis to get a corrected patch."
+                    )
+            i += 1
+        
         return True, ""
     
     def apply_patch(self, file_path: str, patch_content: str, file_hash: Optional[str] = None) -> bool:
@@ -304,6 +322,28 @@ def main():
     
     # Parse issue from comment body
     print("Parsing issue from comment...")
+    
+    # Debug: Show the comment body structure
+    print(f"\n🔍 DEBUG: Comment body info:")
+    print(f"  Total length: {len(comment_body)} characters")
+    print(f"  Contains ISSUE_DATA: {'ISSUE_DATA' in comment_body}")
+    if 'ISSUE_DATA' in comment_body:
+        import re
+        json_match = re.search(r'<!-- ISSUE_DATA: (.+?) -->', comment_body, re.DOTALL)
+        if json_match:
+            raw_json = json_match.group(1)
+            print(f"  JSON metadata length: {len(raw_json)} characters")
+            print(f"\n📋 Full ISSUE_DATA JSON:")
+            print("=" * 80)
+            try:
+                # Pretty print the JSON for readability
+                parsed_json = json.loads(raw_json)
+                print(json.dumps(parsed_json, indent=2))
+            except:
+                # If can't parse, just show raw
+                print(raw_json)
+            print("=" * 80)
+    
     issue = parse_issue_from_comment(comment_body)
     
     if not issue:
@@ -319,7 +359,19 @@ def main():
     patch_content = issue['patch']
     file_hash = issue.get('file_hash')
     
-    print(f"Applying patch to {file_path}")
+    # Debug: Show raw patch content to diagnose any corruption
+    print(f"\n🔍 DEBUG: Raw patch content from JSON:")
+    print(f"  Patch type: {type(patch_content)}")
+    print(f"  Patch length: {len(patch_content)} characters")
+    print(f"  Has \\n escape sequences: {'\\n' in repr(patch_content)}")
+    print(f"  Number of actual newlines: {patch_content.count(chr(10))}")
+    print(f"\n  Raw patch (repr, first 300 chars):")
+    print(f"  {repr(patch_content[:300])}")
+    print(f"\n  Decoded patch (first 10 lines):")
+    for i, line in enumerate(patch_content.split('\n')[:10], 1):
+        print(f"    {i}: {repr(line[:60])}")
+    
+    print(f"\nApplying patch to {file_path}")
     if file_hash:
         print(f"✓ File hash from analysis: {file_hash[:16]}...")
     else:
