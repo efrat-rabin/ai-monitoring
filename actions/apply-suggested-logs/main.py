@@ -128,9 +128,11 @@ class PatchApplier:
         
         # Show first character of each line to help diagnose missing prefixes
         print(f"\n🔍 First character of each patch line (for diagnosis):")
-        for i, line in enumerate(patch_content.split('\n')[:15], 1):  # First 15 lines
+        patch_lines = patch_content.split('\n')
+        print(f"Total lines in patch: {len(patch_lines)}")
+        for i, line in enumerate(patch_lines, 1):  # Show ALL lines
             if not line:
-                print(f"  Line {i}: (empty)")
+                print(f"  Line {i}: (empty line)")
             elif line.startswith('@@'):
                 print(f"  Line {i}: @@ (hunk header)")
             else:
