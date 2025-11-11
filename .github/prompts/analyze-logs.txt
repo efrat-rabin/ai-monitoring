@@ -79,14 +79,21 @@ Please provide:
    - Example BAD: Add error logging before re-throwing: logger.error(...)
 
 4. UNIFIED DIFF PATCH (REQUIRED):
-   - The "patch" field MUST contain a unified diff in standard patch format
+   ⚠️ EVERY LINE IN THE PATCH MUST START WITH ONE OF THESE AT COLUMN 1:
+   - Space character (0x20) for context lines (unchanged lines)
+   - Plus character (+) for added lines  
+   - Minus character (-) for removed lines
+   
+   Rules:
    - Include 3 lines of context before and after the change
    - Use proper unified diff format with @@ hunk headers
-   - Lines to remove start with - (minus) at column 1
-   - Lines to add start with + (plus) at column 1
-   - Context lines start with a space at column 1
-   - NO INDENTATION before the +, -, or space prefix
-   - Example format:
+   - Context lines: Start with SPACE then the code (e.g., " export function")
+   - Lines to add: Start with + then the code (e.g., "+logger.error(...)")
+   - Lines to remove: Start with - then the code (e.g., "-// old code")
+   - NO lines without a prefix character
+   - NO bare code without space/+/- prefix
+   
+   Example (note the space at start of context lines):
      @@ -42,5 +42,7 @@
       try {
         data = await fetch();
@@ -94,8 +101,32 @@ Please provide:
 +  logger.error('Fetch failed', { error });
       }
       return data;
-   - The patch must be ready to apply with 'git apply' command
-   - CRITICAL: The +, -, and space must be in column 1, NOT indented
+   
+   In the example above:
+   - " try {" has a SPACE at column 1 (context line)
+   - "   data = await fetch();" has a SPACE at column 1 (context line)
+   - "+} catch (error) {" has a PLUS at column 1 (added line)
+   - "+  logger.error..." has a PLUS at column 1 (added line)
+   - " }" has a SPACE at column 1 (context line)
+   - "   return data;" has a SPACE at column 1 (context line)
+   
+   ❌ WRONG (no space prefix on context lines):
+     @@ -56,7 +56,7 @@
+       }
+       return null;
+     } catch (error) {
+-      // old code
++      logger.error(...);
+   
+   ✅ CORRECT (space prefix on ALL context lines):
+     @@ -56,7 +56,7 @@
+        }
+        return null;
+      } catch (error) {
+-      // old code
++      logger.error(...);
+   
+   The patch must be ready to apply with 'git apply' command
 
 4. Impact on debugging/monitoring if the log remains missing
 
