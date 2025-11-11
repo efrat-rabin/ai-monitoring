@@ -324,6 +324,13 @@ class CursorAnalyzer:
             for issue in issues:
                 if 'patch' in issue and issue['patch']:
                     patch = issue['patch']
+                    
+                    # Always normalize newlines first (convert literal \n to actual newlines)
+                    from validate_patch import normalize_patch_newlines
+                    patch = normalize_patch_newlines(patch)
+                    issue['patch'] = patch
+                    
+                    # Then validate and fix format
                     if not validate_patch_format(patch):
                         if verbose:
                             print(f"⚠️  Invalid patch format detected in {issue.get('method', 'unknown')}, attempting to fix...")
@@ -335,6 +342,9 @@ class CursorAnalyzer:
                         else:
                             if verbose:
                                 print(f"❌ Could not fix patch format")
+                    elif verbose:
+                        print(f"✅ Patch format valid for {issue.get('method', 'unknown')}")
+                        
                 fixed_issues.append(issue)
             return fixed_issues
         

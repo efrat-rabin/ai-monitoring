@@ -25,7 +25,11 @@ CRITICAL: For each issue, you MUST provide a "patch" field in PROPER GIT DIFF FO
  }
 ```
 
-CRITICAL: Every line in the patch MUST start with space, -, or +. NO lines without prefixes!
+CRITICAL PATCH REQUIREMENTS:
+1. Every line in the patch MUST start with space, -, or +. NO lines without prefixes!
+2. Use ACTUAL newlines in the JSON string, NOT literal \n escape sequences
+3. Each line should be on a separate line in the JSON value
+4. DO NOT put the entire patch on one line with \n separators
 
 ## Analysis Focus Areas:
 1. **Correlation IDs**: Missing request/correlation IDs for tracing

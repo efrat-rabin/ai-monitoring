@@ -8,6 +8,27 @@ import re
 from typing import Optional
 
 
+def normalize_patch_newlines(patch: str) -> str:
+    """
+    Convert literal \\n strings to actual newlines in patches.
+    
+    Args:
+        patch: Patch string that may contain literal \\n
+    
+    Returns:
+        Patch with actual newlines
+    """
+    if not patch:
+        return patch
+    
+    # Check if patch contains literal \n (escaped newlines)
+    if '\\n' in patch and '\n' not in patch:
+        # Replace literal \n with actual newlines
+        patch = patch.replace('\\n', '\n')
+    
+    return patch
+
+
 def validate_patch_format(patch: str) -> bool:
     """
     Validate that a patch follows proper git diff format.
@@ -17,6 +38,9 @@ def validate_patch_format(patch: str) -> bool:
     """
     if not patch or not patch.strip():
         return False
+    
+    # Normalize newlines first
+    patch = normalize_patch_newlines(patch)
     
     # Check for hunk header
     if not re.search(r'@@.*@@', patch):
@@ -57,6 +81,9 @@ def fix_patch_format(patch: str, file_content_before: Optional[str] = None) -> s
     """
     if not patch or not patch.strip():
         return patch
+    
+    # First, normalize newlines (convert literal \n to actual newlines)
+    patch = normalize_patch_newlines(patch)
     
     lines = patch.split('\n')
     fixed_lines = []
