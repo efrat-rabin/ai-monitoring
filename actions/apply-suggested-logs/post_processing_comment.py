@@ -15,7 +15,7 @@ def post_processing_comment(github_token: str, repository: str, pr_number: int, 
     # Post as a reply to the /apply-logs comment
     comment_body = "✅ **SRE bot is processing your request**\n\n"
     comment_body += "This may take up to one minute. Please wait...\n\n"
-    comment_body += "_Processing by AI automation 🤖_"
+    comment_body += "_Processing by SRE AI Bot 🤖_"
     
     # Use PR review comments API to reply to the specific comment
     url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/comments"

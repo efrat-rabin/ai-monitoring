@@ -85,32 +85,6 @@ def format_review_comment(issue: Dict[str, Any], file_path: str) -> str:
     return comment
 
 
-def format_summary_comment(results: List[Dict[str, Any]]) -> str:
-    """Format a summary comment with all issues found."""
-    total_issues = sum(len(r.get("analysis", {}).get("issues", [])) for r in results)
-    
-    comment = "## 🤖 AI Code Analysis Complete\n\n"
-    comment += f"Found **{total_issues} logging improvement(s)** across **{len(results)} file(s)**.\n\n"
-    
-    if total_issues > 0:
-        comment += "Each issue has been posted as a separate comment below. "
-        comment += "Review each suggestion and reply with `/apply-logs` to apply it.\n\n"
-        
-        comment += "### Summary by File\n\n"
-        for result in results:
-            file_path = result.get("file", "unknown")
-            analysis = result.get("analysis", {})
-            issues = analysis.get("issues", [])
-            
-            if issues:
-                comment += f"- `{file_path}`: {len(issues)} issue(s)\n"
-    else:
-        comment += "✅ No logging issues found. Great job!\n\n"  
-    
-    comment += "\n*Analysis powered by Cursor AI*\n"
-    return comment
-
-
 def post_issue_comment(
     github_token: str,
     repository: str,
@@ -252,13 +226,6 @@ def main():
     print("Fetching PR diff...")
     changed_lines = get_pr_changed_lines(github_token, args.repository, pr_number)
     print(f"Found {len(changed_lines)} changed file(s)")
-    
-    # Post summary comment first
-    print("Posting summary comment...")
-    summary = format_summary_comment(results)
-    if not post_issue_comment(github_token, args.repository, pr_number, summary):
-        print("Failed to post summary comment")
-        return 1
     
     # Post review comments on specific lines
     total_comments = 0
