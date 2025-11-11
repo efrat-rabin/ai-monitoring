@@ -7,6 +7,8 @@ import argparse
 import json
 import yaml
 import requests
+import base64
+from generate_monitor_image import generate_monitor_image_sync
 
 
 def post_preview_comment(github_token: str, repository: str, pr_number: int, 
@@ -18,58 +20,34 @@ def post_preview_comment(github_token: str, repository: str, pr_number: int,
     with open(mock_monitor_path, 'r') as f:
         monitor = yaml.safe_load(f)
     
-    # Extract monitor details
-    title = monitor.get('title', 'Monitor')
-    description = monitor['display']['description']
-    severity = monitor.get('severity', 'Unknown')
-    monitor_type = monitor.get('measurementType', 'state').title()
-    queries = monitor['model'].get('queries', [])
-    query_expr = queries[0]['expression'] if queries else 'N/A'
-    thresholds = monitor['model'].get('thresholds', [])
-    threshold_value = thresholds[0]['values'][0] if thresholds else 0
-    threshold_op = thresholds[0].get('operator', 'gt') if thresholds else 'gt'
-    operator_symbol = {'gt': '>', 'gte': '>=', 'lt': '<', 'lte': '<=', 'eq': '=='}.get(threshold_op, '>')
-    eval_interval = monitor['evaluationInterval']['interval']
-    pending_for = monitor['evaluationInterval']['pendingFor']
+    if verbose:
+        print(f"[DEBUG] Generating monitor preview image...")
     
-    # Build HTML comment (GroundCover style - exact match)
-    comment_body = f"""<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; border: 1px solid #d0d7de; border-radius: 6px; padding: 20px; background: #ffffff; color: #1f2328;">
-  
-  <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
-    <h2 style="margin: 0; font-size: 20px; font-weight: 600; color: #1f2328;">{title}</h2>
-    <span style="background: #d1242f; color: #ffffff; padding: 2px 10px; border-radius: 3px; font-size: 13px; font-weight: 500;">Alerting</span>
-  </div>
-  
-  <div style="display: flex; gap: 24px; margin-bottom: 24px; font-size: 14px; color: #656d76;">
-    <div><span style="font-weight: 400;">Monitor type:</span> <span style="color: #1f2328; font-weight: 400;">{monitor_type}</span></div>
-    <div><span style="font-weight: 400;">Severity:</span> <span style="color: #1f2328; font-weight: 600;">{severity}</span></div>
-  </div>
-  
-  <div style="margin-bottom: 24px;">
-    <div style="margin-bottom: 8px; font-size: 14px; font-weight: 600; color: #1f2328;">Description</div>
-    <div style="font-size: 14px; color: #656d76; line-height: 1.5;">{description}</div>
-  </div>
-  
-  <div style="margin-bottom: 24px;">
-    <div style="margin-bottom: 8px; font-size: 14px; font-weight: 600; color: #1f2328;">Query</div>
-    <pre style="background: #f6f8fa; padding: 14px; border-radius: 6px; border: 1px solid #d0d7de; overflow-x: auto; font-size: 12px; font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace; margin: 0; color: #1f2328; line-height: 1.6;"><code>{query_expr}</code></pre>
-  </div>
-  
-  <div style="background: #f6f8fa; padding: 16px; border-radius: 6px; border: 1px solid #d0d7de; font-size: 14px; color: #1f2328;">
-    <div style="margin-bottom: 6px;"><span style="font-weight: 600;">Threshold:</span> {operator_symbol} {threshold_value}</div>
-    <div style="margin-bottom: 6px;"><span style="font-weight: 600;">Evaluation Interval:</span> {eval_interval}</div>
-    <div><span style="font-weight: 600;">Pending For:</span> {pending_for}</div>
-  </div>
-  
-  <hr style="margin: 20px 0; border: none; border-top: 1px solid #d0d7de;">
-  
-  <div style="text-align: center; color: #656d76; font-size: 14px;">
-    Reply with <code style="background: #f6f8fa; padding: 3px 6px; border-radius: 3px; font-size: 12px; color: #1f2328; border: 1px solid #d0d7de;">/create-monitor</code> to create it.
-  </div>
-  
-</div>
+    # Generate monitor preview image
+    image_path = generate_monitor_image_sync(monitor, 'monitor-preview.png')
+    
+    if verbose:
+        print(f"[DEBUG] Image generated: {image_path}")
+    
+    # Read image and convert to base64 for data URI
+    with open(image_path, 'rb') as f:
+        image_data = f.read()
+        image_base64 = base64.b64encode(image_data).decode('utf-8')
+    
+    # Create comment with embedded image using data URI
+    comment_body = f"""## 🔍 GroundCover Monitor Preview
 
-<p style="margin-top: 12px; font-size: 12px; color: #656d76; font-style: italic; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;">Preview by AI automation 🤖</p>"""
+![Monitor Preview](data:image/png;base64,{image_base64})
+
+---
+
+**Reply with `/create-monitor` to create it.**
+
+_Preview by AI automation 🤖_"""
+    
+    # Clean up image file
+    if os.path.exists(image_path):
+        os.remove(image_path)
     
     # Use PR review comments API
     url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/comments"

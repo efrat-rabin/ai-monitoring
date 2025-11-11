@@ -283,6 +283,9 @@ jobs:
           cd .ai-monitoring
           pip install -r requirements.txt
       
+      - name: Install Playwright browsers
+        run: playwright install chromium
+      
       - name: Post monitor preview
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
