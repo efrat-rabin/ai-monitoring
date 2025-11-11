@@ -8,8 +8,19 @@ import os
 import sys
 import json
 import argparse
+import hashlib
 import requests
 from typing import Dict, List, Any
+
+
+def compute_file_hash(file_path: str) -> str:
+    """Compute SHA256 hash of a file for change detection."""
+    try:
+        with open(file_path, 'rb') as f:
+            return hashlib.sha256(f.read()).hexdigest()
+    except Exception as e:
+        print(f"Warning: Could not compute hash for {file_path}: {e}")
+        return ""
 
 
 def format_review_comment(issue: Dict[str, Any], file_path: str) -> str:
@@ -22,12 +33,14 @@ def format_review_comment(issue: Dict[str, Any], file_path: str) -> str:
     # Include metadata as hidden JSON for parsing
     metadata = {
         "file": file_path,
+        "file_hash": compute_file_hash(file_path),
         "severity": severity,
         "category": category,
         "method": method,
         "line": line,
         "description": issue.get("description", ""),
         "recommendation": issue.get("recommendation", ""),
+        "patch": issue.get("patch", ""),
         "impact": issue.get("impact", "")
     }
     
