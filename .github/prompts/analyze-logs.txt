@@ -40,6 +40,24 @@ CRITICAL PATCH REQUIREMENTS:
 6. **Sensitive Data**: Logging passwords, tokens, or PII
 7. **Missing Logs**: Critical operations without logging
 
+## Critical Issue Rules:
+
+1. **ONE ISSUE PER LINE**: If multiple issues exist on the same line, report ONLY the most critical one
+   - Choose by severity: CRITICAL > HIGH > MEDIUM > LOW
+   - Combine multiple improvements into one comprehensive fix
+   - DO NOT create separate issues that modify the same line
+
+2. **Recommendation Format**:
+   - MUST be the exact single line of code to use as replacement
+   - NOT a description like "Add full request context"
+   - For simple changes: just the new line
+   - For multi-line changes: the complete corrected code block
+   
+3. **Patch Requirements**:
+   - Each patch must be independently applicable
+   - DO NOT create patches that depend on other patches
+   - If a line needs multiple improvements, include them ALL in ONE patch
+
 ## JSON Output Format:
 Return a JSON array with this EXACT structure. DO NOT return a flat array of issues!
 
@@ -73,6 +91,34 @@ WRONG - DO NOT return this flat structure:
   { "severity": "CRITICAL", "line": 10, ... },
   { "severity": "HIGH", "line": 20, ... }
 ]
+```
+
+### Example: Handling Multiple Issues on Same Line
+
+**WRONG** (multiple issues for same line):
+```json
+{
+  "issues": [
+    {"line": 12, "severity": "CRITICAL", "description": "Missing correlation ID"},
+    {"line": 12, "severity": "HIGH", "description": "Missing error context"},
+    {"line": 12, "severity": "HIGH", "description": "Missing IP address"}
+  ]
+}
+```
+
+**CORRECT** (one comprehensive issue):
+```json
+{
+  "issues": [
+    {
+      "line": 12,
+      "severity": "CRITICAL",
+      "description": "Error log missing correlation ID, error context, and request metadata",
+      "recommendation": "logger.error('Unhandled error:', { error: err.message, stack: err.stack, correlationId: req.headers['x-correlation-id'], method: req.method, path: req.path, ip: req.ip });",
+      "patch": "@@ -10,3 +10,3 @@\n   ...\n-  logger.error('Unhandled error:', err);\n+  logger.error('Unhandled error:', { error: err.message, stack: err.stack, correlationId: req.headers['x-correlation-id'], method: req.method, path: req.path, ip: req.ip });\n   ..."
+    }
+  ]
+}
 ```
 
 ## Important Requirements:
