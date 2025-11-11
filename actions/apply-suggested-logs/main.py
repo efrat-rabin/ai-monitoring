@@ -398,11 +398,14 @@ def main():
         print(f"\n✓ Successfully applied patch to {file_path}")
         
         # Output commit message for the workflow to use
-        commit_message = issue.get('commit_message', '')
-        if verbose:
-            print(f"[DEBUG] Commit message from issue: {repr(commit_message)}")
+        commit_message = issue.get('commit_message')
         
-        if commit_message:
+        # Debug: show what we got
+        print(f"[DEBUG] commit_message key exists: {'commit_message' in issue}")
+        print(f"[DEBUG] commit_message value: {repr(commit_message)}")
+        print(f"[DEBUG] commit_message type: {type(commit_message)}")
+        
+        if commit_message and commit_message.strip():
             # Set GitHub Actions output
             github_output = os.getenv('GITHUB_OUTPUT')
             if github_output:
@@ -414,7 +417,9 @@ def main():
             else:
                 print(f"⚠️  GITHUB_OUTPUT not available, commit message not set")
         else:
-            print(f"⚠️  No commit_message in issue metadata")
+            print(f"⚠️  No commit_message in issue metadata or it's empty")
+            if verbose:
+                print(f"[DEBUG] Issue keys: {list(issue.keys())}")
         
         if verbose:
             print(f"[DEBUG] Successfully completed apply-suggested-logs/main.py")
