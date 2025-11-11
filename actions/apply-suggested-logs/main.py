@@ -13,6 +13,15 @@ import tempfile
 from pathlib import Path
 from typing import Dict, Any, Optional
 
+# Import patch validation utilities
+sys.path.insert(0, str(Path(__file__).parent.parent / "analyze-pr-code"))
+try:
+    from validate_patch import fix_patch_format, normalize_patch_newlines
+    PATCH_VALIDATION_AVAILABLE = True
+except ImportError:
+    PATCH_VALIDATION_AVAILABLE = False
+    print("Warning: Patch validation module not available")
+
 
 class PatchApplier:
     """Applies logging improvements using unified diffs."""
@@ -358,6 +367,18 @@ def main():
     file_path = issue['file']
     patch_content = issue['patch']
     file_hash = issue.get('file_hash')
+    
+    # Validate and fix patch format if validation is available
+    if PATCH_VALIDATION_AVAILABLE:
+        if verbose:
+            print(f"[DEBUG] Validating and fixing patch format...")
+        original_patch = patch_content
+        patch_content = normalize_patch_newlines(patch_content)
+        patch_content = fix_patch_format(patch_content)
+        if patch_content != original_patch:
+            print(f"✓ Patch format corrected (newlines normalized, hunk headers fixed)")
+        elif verbose:
+            print(f"[DEBUG] Patch format already valid")
     
     # Debug: Show raw patch content to diagnose any corruption
     print(f"\n🔍 DEBUG: Raw patch content from JSON:")
