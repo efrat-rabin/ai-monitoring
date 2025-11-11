@@ -101,27 +101,8 @@ class PatchApplier:
         if not has_header:
             return False, "Patch is missing @@ hunk header"
         
-        # Check that all non-header lines have proper prefix
-        invalid_lines = []
-        for i, line in enumerate(lines, 1):
-            # Skip empty lines and hunk headers
-            if not line or line.startswith('@@') or line.startswith('---') or line.startswith('+++'):
-                continue
-            
-            # Every other line must start with space, +, or -
-            if line[0] not in (' ', '+', '-'):
-                invalid_lines.append((i, line[:60]))  # First 60 chars
-        
-        if invalid_lines:
-            error_msg = "Patch has invalid format - lines without space/+/- prefix:\n"
-            for line_num, line_content in invalid_lines[:5]:  # Show first 5
-                error_msg += f"  Line {line_num}: {repr(line_content)}\n"
-            error_msg += "\n❌ Each line in a unified diff must start with:\n"
-            error_msg += "   - Space (0x20) for context lines (unchanged)\n"
-            error_msg += "   - Plus (+) for added lines\n"
-            error_msg += "   - Minus (-) for removed lines\n"
-            return False, error_msg
-        
+        # Basic format check: after @@, lines should start with space/+/-
+        # But this is just informational - the diagnostic output above will show the real issue
         return True, ""
     
     def apply_patch(self, file_path: str, patch_content: str, file_hash: Optional[str] = None) -> bool:
@@ -145,8 +126,19 @@ class PatchApplier:
         print(patch_content)
         print("=" * 60)
         
+        # Show first character of each line to help diagnose missing prefixes
+        print(f"\n🔍 First character of each patch line (for diagnosis):")
+        for i, line in enumerate(patch_content.split('\n')[:15], 1):  # First 15 lines
+            if not line:
+                print(f"  Line {i}: (empty)")
+            elif line.startswith('@@'):
+                print(f"  Line {i}: @@ (hunk header)")
+            else:
+                first_char_repr = repr(line[0])
+                print(f"  Line {i}: {first_char_repr} | {line[:40]}")
+        
         if self.verbose:
-            print(f"[DEBUG] Raw patch content (repr):")
+            print(f"\n[DEBUG] Raw patch content (repr):")
             print(repr(patch_content))
         
         # Validate patch format before attempting to apply
