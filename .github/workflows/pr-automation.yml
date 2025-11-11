@@ -219,6 +219,7 @@ jobs:
       
       - name: Apply suggested changes
         if: steps.check_apply.outputs.should_apply == 'true'
+        id: apply_changes
         env:
           CURSOR_API_KEY: ${{ secrets.cursor_api_key }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -254,7 +255,15 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Apply AI-suggested logging improvements"
+            # Use the commit message from apply step if available, otherwise use default
+            COMMIT_MSG="${{ steps.apply_changes.outputs.commit_message }}"
+            if [ -n "$COMMIT_MSG" ]; then
+              git commit -m "$COMMIT_MSG"
+              echo "✓ Committed with detailed message"
+            else
+              git commit -m "Apply AI-suggested logging improvements"
+              echo "✓ Committed with default message"
+            fi
             git push
           fi
       

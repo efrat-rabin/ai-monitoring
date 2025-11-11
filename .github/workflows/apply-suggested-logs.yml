@@ -102,20 +102,30 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ inputs.git_token || secrets.git_token || github.token }}
           CURSOR_API_KEY: ${{ inputs.cursor_api_key || secrets.cursor_api_key }}
+          GITHUB_OUTPUT: ${{ github.output }}
       
       - name: Commit and push changes
         id: commit-changes
         run: |
           if [[ -n $(git status --porcelain) ]]; then
             git add .
-            git commit -m "🤖 Apply AI-suggested logging improvements
             
-            Applied structured logging improvements suggested by AI analysis.
+            # Use the commit message from apply step if available, otherwise use default
+            COMMIT_MSG="${{ steps.apply-logs.outputs.commit_message }}"
+            if [ -n "$COMMIT_MSG" ]; then
+              git commit -m "$COMMIT_MSG"
+              echo "✅ Changes committed with detailed message"
+            else
+              git commit -m "🤖 Apply AI-suggested logging improvements
+              
+              Applied structured logging improvements suggested by AI analysis.
+              
+              Co-authored-by: github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+              echo "✅ Changes committed with default message"
+            fi
             
-            Co-authored-by: github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
             git push
             echo "changes_applied=true" >> $GITHUB_OUTPUT
-            echo "✅ Changes committed and pushed"
           else
             echo "changes_applied=false" >> $GITHUB_OUTPUT
             echo "ℹ️ No changes to commit"

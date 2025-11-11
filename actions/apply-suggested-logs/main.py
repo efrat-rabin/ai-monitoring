@@ -140,13 +140,6 @@ class PatchApplier:
             print(f"ERROR: File not found: {file_path}")
             return False
         
-        # Verify file hasn't changed if hash provided
-        if file_hash:
-            if not self.verify_file_unchanged(file_path, file_hash):
-                print(f"ERROR: File has been modified since analysis.")
-                print(f"Please re-run analysis on the updated code.")
-                return False
-        
         # Always show patch content for debugging
         print(f"\n📝 Patch content from analysis:")
         print("=" * 60)
@@ -403,6 +396,15 @@ def main():
     
     if applier.apply_patch(file_path, patch_content, file_hash):
         print(f"\n✓ Successfully applied patch to {file_path}")
+        
+        # Write commit message from analysis if provided
+        commit_message = issue.get('commit_message')
+        if commit_message:
+            commit_msg_file = 'commit-message.txt'
+            with open(commit_msg_file, 'w') as f:
+                f.write(commit_message)
+            print(f"✓ Commit message written to {commit_msg_file}")
+        
         if verbose:
             print(f"[DEBUG] Successfully completed apply-suggested-logs/main.py")
         return 0

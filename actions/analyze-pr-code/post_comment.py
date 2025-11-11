@@ -52,7 +52,8 @@ def format_review_comment(issue: Dict[str, Any], file_path: str) -> str:
         "description": issue.get("description", ""),
         "recommendation": recommendation,
         "patch": patch,
-        "impact": issue.get("impact", "")
+        "impact": issue.get("impact", ""),
+        "commit_message": issue.get("commit_message", "")
     }
     
     comment = f"**🤖 {severity}** - {category} in `{method}`\n\n"
