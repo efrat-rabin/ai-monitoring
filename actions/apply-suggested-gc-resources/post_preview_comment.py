@@ -49,13 +49,13 @@ def post_preview_comment(github_token: str, repository: str, pr_number: int,
         
         print(f"[INFO] Image moved to: {dest_path}")
         
-        # Construct GitHub raw URL
-        # Format: https://raw.githubusercontent.com/{owner}/{repo}/main/preview-images/{filename}
-        workflow_owner = "efrat-rabin"  # The ai-monitoring repo owner
-        workflow_repo = "ai-monitoring"
-        image_url = f"https://raw.githubusercontent.com/{workflow_owner}/{workflow_repo}/main/preview-images/{temp_image_name}"
+        # Construct GitHub raw URL using the customer's repository
+        # Format: https://raw.githubusercontent.com/{owner}/{repo}/HEAD/preview-images/{filename}
+        # Using HEAD so it works regardless of default branch name (main/master)
+        image_url = f"https://raw.githubusercontent.com/{owner}/{repo}/HEAD/preview-images/{temp_image_name}"
         
         print(f"[INFO] Image will be accessible at: {image_url}")
+        print(f"[INFO] Image will be committed to: {owner}/{repo}")
         
         # Create comment with image
         comment_body = f"""## 🔍 GroundCover Monitor Preview

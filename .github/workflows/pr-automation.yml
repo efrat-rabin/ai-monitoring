@@ -266,7 +266,15 @@ jobs:
           echo "pr_number=${{ inputs.pr_number || github.event.pull_request.number }}" >> $GITHUB_OUTPUT
           echo "repository=${{ inputs.repository || github.repository }}" >> $GITHUB_OUTPUT
       
-      - name: Checkout workflow repository
+      - name: Checkout customer repository (for storing image)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.pr_info.outputs.repository }}
+          ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+      
+      - name: Checkout workflow repository (for scripts)
         uses: actions/checkout@v4
         with:
           repository: efrat-rabin/ai-monitoring
@@ -286,9 +294,8 @@ jobs:
       - name: Install Playwright browsers
         run: playwright install chromium
       
-      - name: Configure git
+      - name: Configure git for customer repo
         run: |
-          cd .ai-monitoring
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
       
@@ -302,16 +309,15 @@ jobs:
             --repository ${{ steps.pr_info.outputs.repository }} \
             --comment-id "${{ github.event.comment.id }}" \
             --mock-monitor .ai-monitoring/actions/apply-suggested-gc-resources/mock-monitor.yaml \
-            --workflow-repo-path .ai-monitoring
+            --workflow-repo-path .
       
-      - name: Push preview image to repo
+      - name: Push preview image to customer repo
         run: |
-          cd .ai-monitoring
           if [ -n "$(git status --porcelain)" ]; then
             git add preview-images/
             git commit -m "Add monitor preview image [skip ci]"
-            git push origin main
-            echo "Preview image committed and pushed"
+            git push origin ${{ github.event.pull_request.head.ref }}
+            echo "Preview image committed and pushed to customer repo"
           else
             echo "No new preview image to commit"
           fi
