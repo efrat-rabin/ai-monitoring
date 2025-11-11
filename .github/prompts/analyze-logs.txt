@@ -12,9 +12,12 @@ CRITICAL: For each issue, you MUST provide a "patch" field in PROPER GIT DIFF FO
 4. Every line MUST have a prefix ( - or +)
 5. Line counts in header MUST match actual lines in hunk
 
-## Line Count Rules:
-- old_count = context lines + removed lines
-- new_count = context lines + added lines
+## Line Count Rules (CRITICAL - git apply will fail if wrong):
+- old_count = number of context lines + number of removed lines
+- new_count = number of context lines + number of added lines
+- Context lines (starting with space) count in BOTH old and new
+- Count ALL lines in the hunk, not just changed lines
+- Verify your count matches the actual lines in your patch!
 
 ## Diff Example (CORRECT FORMAT):
 ```plaintext

@@ -68,6 +68,73 @@ def validate_patch_format(patch: str) -> bool:
     return has_changes
 
 
+def fix_hunk_header_counts(patch: str) -> str:
+    """
+    Fix incorrect line counts in hunk headers.
+    
+    Args:
+        patch: The patch string with potentially incorrect hunk headers
+    
+    Returns:
+        Patch with corrected hunk headers
+    """
+    if not patch or not patch.strip():
+        return patch
+    
+    lines = patch.split('\n')
+    fixed_lines = []
+    i = 0
+    
+    while i < len(lines):
+        line = lines[i]
+        
+        # Check if this is a hunk header
+        if line.startswith('@@'):
+            # Parse the header
+            hunk_match = re.match(r'@@\s+-(\d+),?(\d+)?\s+\+(\d+),?(\d+)?\s+@@', line)
+            if hunk_match:
+                old_start = int(hunk_match.group(1))
+                new_start = int(hunk_match.group(3))
+                
+                # Count the actual lines in this hunk
+                old_count = 0
+                new_count = 0
+                j = i + 1
+                
+                while j < len(lines):
+                    next_line = lines[j]
+                    # Stop at next hunk or end
+                    if next_line.startswith('@@'):
+                        break
+                    if not next_line.strip():
+                        j += 1
+                        continue
+                    
+                    if next_line.startswith('-'):
+                        old_count += 1
+                    elif next_line.startswith('+'):
+                        new_count += 1
+                    elif next_line.startswith(' '):
+                        # Context line counts in both
+                        old_count += 1
+                        new_count += 1
+                    
+                    j += 1
+                
+                # Reconstruct hunk header with correct counts
+                fixed_header = f'@@ -{old_start},{old_count} +{new_start},{new_count} @@'
+                fixed_lines.append(fixed_header)
+            else:
+                # Couldn't parse, keep original
+                fixed_lines.append(line)
+        else:
+            fixed_lines.append(line)
+        
+        i += 1
+    
+    return '\n'.join(fixed_lines)
+
+
 def fix_patch_format(patch: str, file_content_before: Optional[str] = None) -> str:
     """
     Attempt to fix a malformed patch to follow git diff format.
@@ -115,7 +182,12 @@ def fix_patch_format(patch: str, file_content_before: Optional[str] = None) -> s
         # (In git diff, context lines start with space)
         fixed_lines.append(' ' + line)
     
-    return '\n'.join(fixed_lines)
+    result = '\n'.join(fixed_lines)
+    
+    # Fix hunk header line counts
+    result = fix_hunk_header_counts(result)
+    
+    return result
 
 
 def format_patch_for_display(patch: str) -> str:
