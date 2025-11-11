@@ -29,38 +29,43 @@ def post_preview_comment(github_token: str, repository: str, pr_number: int,
     if verbose:
         print(f"[DEBUG] Image generated: {image_path}")
     
-    # Upload image to GitHub to get a URL
-    # We'll create an asset by attaching to a temporary draft issue comment
-    upload_url = f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_number}/assets"
-    headers = {
+    # Read image and encode as base64
+    with open(image_path, 'rb') as f:
+        image_data = f.read()
+        image_base64 = base64.b64encode(image_data).decode('utf-8')
+    
+    if verbose:
+        print(f"[DEBUG] Creating GitHub Gist with image...")
+    
+    # Create a GitHub Gist with the image
+    gist_url = "https://api.github.com/gists"
+    gist_headers = {
         "Authorization": f"Bearer {github_token}",
         "Accept": "application/vnd.github+json",
     }
     
-    with open(image_path, 'rb') as f:
-        image_data = f.read()
+    title = monitor.get('title', 'Monitor')
+    gist_payload = {
+        "description": f"GroundCover Monitor Preview - {title}",
+        "public": True,
+        "files": {
+            "monitor-preview.png": {
+                "content": image_base64
+            }
+        }
+    }
     
-    # Upload as asset
-    upload_headers = headers.copy()
-    upload_headers['Content-Type'] = 'image/png'
-    upload_headers['Content-Length'] = str(len(image_data))
+    # Create the gist
+    gist_response = requests.post(gist_url, headers=gist_headers, json=gist_payload)
     
     if verbose:
-        print(f"[DEBUG] Uploading image to GitHub...")
+        print(f"[DEBUG] Gist creation status: {gist_response.status_code}")
     
-    # Use the asset upload endpoint
-    upload_response = requests.post(
-        upload_url,
-        headers=upload_headers,
-        data=image_data,
-        params={'name': 'monitor-preview.png'}
-    )
-    
-    if upload_response.status_code != 201:
-        # Fallback to simple text if upload fails
+    if gist_response.status_code != 201:
+        # Fallback to markdown if gist creation fails
         if verbose:
-            print(f"[DEBUG] Image upload failed: {upload_response.status_code}")
-            print(f"[DEBUG] Response: {upload_response.text}")
+            print(f"[DEBUG] Gist creation failed: {gist_response.status_code}")
+            print(f"[DEBUG] Response: {gist_response.text}")
         
         # Use simple markdown format as fallback
         title = monitor.get('title', 'Monitor')
@@ -100,12 +105,15 @@ def post_preview_comment(github_token: str, repository: str, pr_number: int,
 
 _Preview by AI automation 🤖_"""
     else:
-        image_url = upload_response.json()['browser_download_url']
+        # Gist created successfully - get the raw URL
+        gist_data = gist_response.json()
+        image_url = gist_data['files']['monitor-preview.png']['raw_url']
         
         if verbose:
-            print(f"[DEBUG] Image uploaded: {image_url}")
+            print(f"[DEBUG] Gist created successfully")
+            print(f"[DEBUG] Image URL: {image_url}")
         
-        # Create comment with uploaded image
+        # Create comment with gist image
         comment_body = f"""## 🔍 GroundCover Monitor Preview
 
 ![Monitor Preview]({image_url})
