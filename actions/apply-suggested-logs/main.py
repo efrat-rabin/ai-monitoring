@@ -320,6 +320,12 @@ def main():
     file_hash = issue.get('file_hash')
     
     print(f"Applying patch to {file_path}")
+    if file_hash:
+        print(f"✓ File hash from analysis: {file_hash[:16]}...")
+    else:
+        print("⚠️  No file hash in metadata - cannot verify file hasn't changed")
+        print("   This comment was created before file hash tracking was added")
+        print("   Proceeding anyway, but patch may fail if file changed")
     
     if applier.apply_patch(file_path, patch_content, file_hash):
         print(f"\n✓ Successfully applied patch to {file_path}")
