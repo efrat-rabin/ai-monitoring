@@ -39,6 +39,47 @@ class PatchApplier:
         
         return current_hash == expected_hash
     
+    def _show_file_changes(self, file_path: str):
+        """Show recent changes to the file to help understand why patch failed."""
+        try:
+            print(f"\n📋 Recent changes to {file_path}:")
+            
+            # Try to get the last commit that modified this file
+            result = subprocess.run(
+                ['git', 'log', '--oneline', '-n', '3', '--', file_path],
+                capture_output=True,
+                text=True,
+                cwd='.'
+            )
+            
+            if result.returncode == 0 and result.stdout.strip():
+                print("\nLast commits affecting this file:")
+                print(result.stdout.strip())
+                
+                # Show the diff from the most recent commit
+                print(f"\nChanges in the last commit:")
+                diff_result = subprocess.run(
+                    ['git', 'diff', 'HEAD~1', 'HEAD', '--', file_path],
+                    capture_output=True,
+                    text=True,
+                    cwd='.'
+                )
+                
+                if diff_result.returncode == 0 and diff_result.stdout.strip():
+                    # Show first 30 lines of diff
+                    diff_lines = diff_result.stdout.split('\n')[:30]
+                    print('\n'.join(diff_lines))
+                    if len(diff_result.stdout.split('\n')) > 30:
+                        print("\n... (diff truncated)")
+                else:
+                    print("(No diff available)")
+            else:
+                print("(No git history found for this file)")
+                
+        except Exception as e:
+            if self.verbose:
+                print(f"[DEBUG] Could not show file changes: {e}")
+    
     def apply_patch(self, file_path: str, patch_content: str, file_hash: Optional[str] = None) -> bool:
         """Apply a unified diff patch to a file."""
         print(f"Applying patch to: {file_path}")
@@ -99,8 +140,11 @@ class PatchApplier:
                 
                 # Try to extract line number from error
                 if "does not match" in result.stderr or "does not apply" in result.stderr:
-                    print("This usually means the code context has changed.")
+                    print("\nThis usually means the code context has changed.")
                     print("Please re-run analysis to generate updated patches.")
+                    
+                    # Show what changed in the file
+                    self._show_file_changes(file_path)
                 
                 return False
                 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Post success comment after applying logs"""
+"""Post immediate acknowledgement comment when /apply-logs is triggered"""
 
 import os
 import sys
@@ -8,21 +8,26 @@ import json
 import requests
 
 
-def post_comment(github_token: str, repository: str, pr_number: int, comment_id: str = None, verbose: bool = False):
-    """Post a comment on the PR."""
+def post_processing_comment(github_token: str, repository: str, pr_number: int, comment_id: str, verbose: bool = False):
+    """Post a processing acknowledgement comment as reply to the trigger comment."""
     owner, repo = repository.split("/")
     
-    comment_body = "✅ **Done! Logging improvements applied successfully**\n\n"
-    comment_body += "The changes have been committed to this PR. Please review the latest commit.\n\n"
-    comment_body += "_Applied by AI automation 🤖_"
+    # Post as a reply to the /apply-logs comment
+    comment_body = "✅ **SRE bot is processing your request**\n\n"
+    comment_body += "This may take up to one minute. Please wait...\n\n"
+    comment_body += "_Processing by AI automation 🤖_"
     
-    url = f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_number}/comments"
+    # Use PR review comments API to reply to the specific comment
+    url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/comments"
     headers = {
         "Authorization": f"Bearer {github_token}",
         "Accept": "application/vnd.github+json",
     }
     
-    payload = {"body": comment_body}
+    payload = {
+        "body": comment_body,
+        "in_reply_to": int(comment_id)
+    }
     
     if verbose:
         print(f"[DEBUG] API Request: POST {url}")
@@ -39,25 +44,27 @@ def post_comment(github_token: str, repository: str, pr_number: int, comment_id:
     
     if verbose:
         response_data = response.json()
-        print(f"[DEBUG] Comment posted successfully")
+        print(f"[DEBUG] Processing comment posted successfully")
         print(f"[DEBUG] Comment ID: {response_data.get('id')}")
         print(f"[DEBUG] Comment URL: {response_data.get('html_url')}")
     
-    print("✓ Comment posted")
+    print("✓ Processing comment posted")
+    return response.json().get('id')
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--pr-number", type=str, required=True)
     parser.add_argument("--repository", type=str, required=True)
-    parser.add_argument("--comment-id", type=str)
+    parser.add_argument("--comment-id", type=str, required=True, 
+                       help="The comment ID to reply to")
     args = parser.parse_args()
     
     # Use GitHub Actions' native debug mode
     verbose = os.getenv('ACTIONS_STEP_DEBUG', 'false').lower() in ('true', '1')
     
     if verbose:
-        print(f"[DEBUG] Running post_apply_comment.py with verbose mode")
+        print(f"[DEBUG] Running post_processing_comment.py with verbose mode")
         print(f"[DEBUG] PR Number: {args.pr_number}")
         print(f"[DEBUG] Repository: {args.repository}")
         print(f"[DEBUG] Comment ID: {args.comment_id}")
@@ -71,12 +78,27 @@ def main():
         print(f"[DEBUG] GITHUB_TOKEN present: True")
     
     try:
-        post_comment(github_token, args.repository, int(args.pr_number), args.comment_id, verbose=verbose)
+        processing_comment_id = post_processing_comment(
+            github_token, 
+            args.repository, 
+            int(args.pr_number), 
+            args.comment_id, 
+            verbose=verbose
+        )
+        
+        # Output for GitHub Actions
+        github_output = os.getenv('GITHUB_OUTPUT')
+        if github_output:
+            with open(github_output, 'a') as f:
+                f.write(f"processing_comment_id={processing_comment_id}\n")
+        
         if verbose:
-            print(f"[DEBUG] Successfully completed post_apply_comment.py")
+            print(f"[DEBUG] Successfully completed post_processing_comment.py")
+            print(f"[DEBUG] Processing comment ID: {processing_comment_id}")
+        
         return 0
     except Exception as e:
-        print(f"ERROR: Failed to post comment: {e}")
+        print(f"ERROR: Failed to post processing comment: {e}")
         if verbose:
             import traceback
             traceback.print_exc()
