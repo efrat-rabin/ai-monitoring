@@ -18,18 +18,58 @@ def post_preview_comment(github_token: str, repository: str, pr_number: int,
     with open(mock_monitor_path, 'r') as f:
         monitor = yaml.safe_load(f)
     
-    # Extract title and description
+    # Extract monitor details
     title = monitor.get('title', 'Monitor')
     description = monitor['display']['description']
     severity = monitor.get('severity', 'Unknown')
+    monitor_type = monitor.get('measurementType', 'state').title()
+    queries = monitor['model'].get('queries', [])
+    query_expr = queries[0]['expression'] if queries else 'N/A'
+    thresholds = monitor['model'].get('thresholds', [])
+    threshold_value = thresholds[0]['values'][0] if thresholds else 0
+    threshold_op = thresholds[0].get('operator', 'gt') if thresholds else 'gt'
+    operator_symbol = {'gt': '>', 'gte': '>=', 'lt': '<', 'lte': '<=', 'eq': '=='}.get(threshold_op, '>')
+    eval_interval = monitor['evaluationInterval']['interval']
+    pending_for = monitor['evaluationInterval']['pendingFor']
     
-    # Build comment (concise format)
-    comment_body = "🔍 **GroundCover Monitor Preview**\n\n"
-    comment_body += f"### {title}\n\n"
-    comment_body += f"{description} | Severity: **{severity}**\n\n"
-    comment_body += "---\n\n"
-    comment_body += "Reply with `/create-monitor` to create it.\n\n"
-    comment_body += "_Preview by AI automation 🤖_"
+    # Build HTML comment (GroundCover style)
+    comment_body = f"""<div style="border: 1px solid #e1e4e8; border-radius: 6px; padding: 16px; background: #ffffff;">
+  
+  <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+    <h3 style="margin: 0; font-size: 18px; font-weight: 600;">{title}</h3>
+    <span style="background: #dc3545; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">Alerting</span>
+  </div>
+  
+  <div style="display: flex; gap: 16px; margin-bottom: 12px; font-size: 14px; color: #586069;">
+    <span><strong>Monitor type:</strong> {monitor_type}</span>
+    <span><strong>Severity:</strong> {severity}</span>
+  </div>
+  
+  <div style="margin-bottom: 16px;">
+    <h4 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #24292e;">Description</h4>
+    <p style="margin: 0; color: #586069; font-size: 14px;">{description}</p>
+  </div>
+  
+  <div style="margin-bottom: 16px;">
+    <h4 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #24292e;">Query</h4>
+    <pre style="background: #f6f8fa; padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 12px; margin: 0;"><code>{query_expr}</code></pre>
+  </div>
+  
+  <div style="background: #f6f8fa; padding: 12px; border-radius: 4px; font-size: 13px;">
+    <div style="margin-bottom: 4px;"><strong>Threshold:</strong> {operator_symbol} {threshold_value}</div>
+    <div style="margin-bottom: 4px;"><strong>Evaluation Interval:</strong> {eval_interval}</div>
+    <div><strong>Pending For:</strong> {pending_for}</div>
+  </div>
+  
+  <hr style="margin: 16px 0; border: none; border-top: 1px solid #e1e4e8;">
+  
+  <div style="text-align: center; color: #586069; font-size: 14px;">
+    Reply with <code>/create-monitor</code> to create it.
+  </div>
+  
+</div>
+
+<p style="margin-top: 8px; font-size: 12px; color: #6a737d; font-style: italic;">Preview by AI automation 🤖</p>"""
     
     # Use PR review comments API
     url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/comments"
