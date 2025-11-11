@@ -175,8 +175,10 @@ class PatchApplier:
         
         try:
             # Try to apply patch using git apply
+            # Use --ignore-whitespace to be more forgiving with whitespace differences
+            # Use --whitespace=fix to automatically fix whitespace issues
             result = subprocess.run(
-                ['git', 'apply', '--verbose', tmp_patch_file],
+                ['git', 'apply', '--ignore-whitespace', '--whitespace=fix', '--verbose', tmp_patch_file],
                 capture_output=True,
                 text=True,
                 cwd=os.path.dirname(file_path) or '.'
