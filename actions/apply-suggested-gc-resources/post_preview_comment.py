@@ -29,15 +29,86 @@ def post_preview_comment(github_token: str, repository: str, pr_number: int,
     if verbose:
         print(f"[DEBUG] Image generated: {image_path}")
     
-    # Read image and convert to base64 for data URI
+    # Upload image to GitHub to get a URL
+    # We'll create an asset by attaching to a temporary draft issue comment
+    upload_url = f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_number}/assets"
+    headers = {
+        "Authorization": f"Bearer {github_token}",
+        "Accept": "application/vnd.github+json",
+    }
+    
     with open(image_path, 'rb') as f:
         image_data = f.read()
-        image_base64 = base64.b64encode(image_data).decode('utf-8')
     
-    # Create comment with embedded image using data URI
-    comment_body = f"""## 🔍 GroundCover Monitor Preview
+    # Upload as asset
+    upload_headers = headers.copy()
+    upload_headers['Content-Type'] = 'image/png'
+    upload_headers['Content-Length'] = str(len(image_data))
+    
+    if verbose:
+        print(f"[DEBUG] Uploading image to GitHub...")
+    
+    # Use the asset upload endpoint
+    upload_response = requests.post(
+        upload_url,
+        headers=upload_headers,
+        data=image_data,
+        params={'name': 'monitor-preview.png'}
+    )
+    
+    if upload_response.status_code != 201:
+        # Fallback to simple text if upload fails
+        if verbose:
+            print(f"[DEBUG] Image upload failed: {upload_response.status_code}")
+            print(f"[DEBUG] Response: {upload_response.text}")
+        
+        # Use simple markdown format as fallback
+        title = monitor.get('title', 'Monitor')
+        description = monitor['display']['description']
+        severity = monitor.get('severity', 'Unknown')
+        monitor_type = monitor.get('measurementType', 'state').title()
+        queries = monitor['model'].get('queries', [])
+        query_expr = queries[0]['expression'] if queries else 'N/A'
+        thresholds = monitor['model'].get('thresholds', [])
+        threshold_value = thresholds[0]['values'][0] if thresholds else 0
+        threshold_op = thresholds[0].get('operator', 'gt') if thresholds else 'gt'
+        operator_symbol = {'gt': '>', 'gte': '>=', 'lt': '<', 'lte': '<=', 'eq': '=='}.get(threshold_op, '>')
+        eval_interval = monitor['evaluationInterval']['interval']
+        pending_for = monitor['evaluationInterval']['pendingFor']
+        
+        comment_body = f"""## 🔍 GroundCover Monitor Preview
 
-![Monitor Preview](data:image/png;base64,{image_base64})
+### {title}
+**🚨 Alerting** • Monitor type: {monitor_type} • Severity: **{severity}**
+
+**Description**  
+{description}
+
+**Query**
+```promql
+{query_expr}
+```
+
+**Evaluation Settings**
+• Threshold: `{operator_symbol} {threshold_value}`  
+• Evaluation Interval: `{eval_interval}`  
+• Pending For: `{pending_for}`
+
+---
+
+**Reply with `/create-monitor` to create it.**
+
+_Preview by AI automation 🤖_"""
+    else:
+        image_url = upload_response.json()['browser_download_url']
+        
+        if verbose:
+            print(f"[DEBUG] Image uploaded: {image_url}")
+        
+        # Create comment with uploaded image
+        comment_body = f"""## 🔍 GroundCover Monitor Preview
+
+![Monitor Preview]({image_url})
 
 ---
 
