@@ -167,6 +167,15 @@ jobs:
             --comment-id "$COMMENT_ID" \
             --in-reply-to-id "$IN_REPLY_TO_ID"
       
+      - name: Load parent comment
+        if: steps.check_apply.outputs.should_apply == 'true'
+        id: load_comment
+        run: |
+          PARENT_BODY=$(cat apply-trigger.json | jq -r '.parent_comment_body')
+          echo "parent_body<<EOF" >> $GITHUB_OUTPUT
+          echo "$PARENT_BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
       - name: Apply suggested changes
         if: steps.check_apply.outputs.should_apply == 'true'
         env:
@@ -175,9 +184,16 @@ jobs:
         run: |
           export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
           cd ${GITHUB_WORKSPACE}
+          
+          # Write parent comment to file
+          cat > parent-comment.txt << 'COMMENT_EOF'
+          ${{ steps.load_comment.outputs.parent_body }}
+          COMMENT_EOF
+          
           python .ai-monitoring/actions/apply-suggested-logs/main.py \
             --pr-number ${{ steps.pr_info.outputs.pr_number }} \
-            --repository ${{ steps.pr_info.outputs.repository }}
+            --repository ${{ steps.pr_info.outputs.repository }} \
+            --comment-body-file parent-comment.txt
       
       - name: Commit and push changes
         if: steps.check_apply.outputs.should_apply == 'true'
