@@ -17,7 +17,7 @@ def post_comment(github_token: str, repository: str, pr_number: int, comment_id:
     comment_body += "---\n\n"
     comment_body += "### 🚀 Next Level: Generate GroundCover Resources\n\n"
     comment_body += "Want to automatically generate GroundCover alerts based on your logs?\n\n"
-    comment_body += "Write a new comment with:\n"
+    comment_body += "Reply to this comment with:\n"
     comment_body += "```\n"
     comment_body += "/generate-alerts\n"
     comment_body += "```\n\n"
