@@ -225,10 +225,10 @@ def main():
     
     pr_number = int(args.pr_number)
     
-    # Get changed lines from PR diff
-    print("Fetching PR diff...")
-    changed_lines = get_pr_changed_lines(github_token, args.repository, pr_number)
-    print(f"Found {len(changed_lines)} changed file(s)")
+    # Get changed lines from PR diff (DISABLED FOR NOW)
+    # print("Fetching PR diff...")
+    # changed_lines = get_pr_changed_lines(github_token, args.repository, pr_number)
+    # print(f"Found {len(changed_lines)} changed file(s)")
     
     # Post summary comment first
     print("Posting summary comment...")
@@ -246,8 +246,8 @@ def main():
         analysis = result.get("analysis", {})
         issues = analysis.get("issues", [])
         
-        # Get changed lines for this file
-        file_changed_lines = changed_lines.get(file_path, set())
+        # Get changed lines for this file (DISABLED - will attempt all lines)
+        # file_changed_lines = changed_lines.get(file_path, set())
         
         for issue in issues:
             line = issue.get("line")
@@ -255,11 +255,11 @@ def main():
                 print(f"Skipping {file_path} - no line number")
                 continue
             
-            # Check if the line is in the PR diff
-            if file_changed_lines and line not in file_changed_lines:
-                print(f"Skipping {file_path}:{line} - line not in PR diff")
-                skipped_not_in_diff += 1
-                continue
+            # Check if the line is in the PR diff (DISABLED FOR NOW)
+            # if file_changed_lines and line not in file_changed_lines:
+            #     print(f"Skipping {file_path}:{line} - line not in PR diff")
+            #     skipped_not_in_diff += 1
+            #     continue
             
             method = issue.get("method", "N/A")
             print(f"Posting review comment on {file_path}:{line} ({method})")
@@ -277,8 +277,8 @@ def main():
             ):
                 total_comments += 1
     
-    if skipped_not_in_diff > 0:
-        print(f"\n⚠️ Skipped {skipped_not_in_diff} issue(s) not in PR diff")
+    # if skipped_not_in_diff > 0:
+    #     print(f"\n⚠️ Skipped {skipped_not_in_diff} issue(s) not in PR diff")
     
     print(f"✅ Posted {total_comments} review comment(s) + 1 summary")
     return 0
