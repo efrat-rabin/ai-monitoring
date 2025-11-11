@@ -9,20 +9,32 @@ import requests
 
 
 def post_comment(github_token: str, repository: str, pr_number: int, comment_id: str = None, verbose: bool = False):
-    """Post a comment on the PR."""
+    """Post a comment on the PR as a reply to the processing comment."""
     owner, repo = repository.split("/")
     
     comment_body = "✅ **Done! Logging improvements applied successfully**\n\n"
     comment_body += "The changes have been committed to this PR. Please review the latest commit.\n\n"
+    comment_body += "---\n\n"
+    comment_body += "### 🚀 Next Level: Generate GroundCover Resources\n\n"
+    comment_body += "Want to automatically generate GroundCover alerts based on your logs?\n\n"
+    comment_body += "Write a new comment with:\n"
+    comment_body += "```\n"
+    comment_body += "/generate-alerts\n"
+    comment_body += "```\n\n"
     comment_body += "_Applied by AI automation 🤖_"
     
-    url = f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_number}/comments"
+    # Use PR review comments API to enable threaded replies
+    url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/comments"
     headers = {
         "Authorization": f"Bearer {github_token}",
         "Accept": "application/vnd.github+json",
     }
     
     payload = {"body": comment_body}
+    
+    # Add in_reply_to field to make it a threaded reply
+    if comment_id:
+        payload["in_reply_to"] = int(comment_id)
     
     if verbose:
         print(f"[DEBUG] API Request: POST {url}")
