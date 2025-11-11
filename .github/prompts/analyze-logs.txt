@@ -84,7 +84,8 @@ CORRECT STRUCTURE (with file and analysis wrapper):
           "description": "Clear description of the issue",
           "recommendation": "Exact code to use as replacement (single line or multi-line)",
           "patch": "@@ -120,5 +120,5 @@\n context line\n context line\n-old code line\n+new code line\n context line\n context line",
-          "impact": "Business/technical impact of this issue"
+          "impact": "Business/technical impact of this issue",
+          "commit_message": "🤖 Concise commit title describing the logging change"
         }
       ],
       "summary": "Brief summary of all issues in this file"
@@ -144,6 +145,7 @@ WRONG - DO NOT return this flat structure:
 - **recommendation**: Should be the exact new code to use
 - **line**: Must be the exact line number where the issue exists
 - **severity**: Choose based on production impact (CRITICAL = breaks debugging, HIGH = missing important data, MEDIUM = suboptimal, LOW = minor improvement)
+- **commit_message**: A concise, one-line commit message that starts with 🤖 emoji and clearly describes what logging is being added (e.g., "🤖 Add error logging for batch processing failures")
 
 ## Severity Guidelines:
 - **CRITICAL**: Missing correlation IDs, silent failures, errors without logging
