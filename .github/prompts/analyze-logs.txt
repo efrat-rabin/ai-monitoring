@@ -1,220 +1,75 @@
-🚨🚨🚨 CRITICAL: RESPONSE FORMAT 🚨🚨🚨
+You are a senior observability engineer reviewing code for logging best practices. Analyze the provided files for logging improvements and return your analysis as a JSON array.
 
-YOUR ENTIRE RESPONSE MUST BE A VALID JSON ARRAY.
-FIRST CHARACTER: [
-LAST CHARACTER: ]
-NO TEXT BEFORE [
-NO TEXT AFTER ]
-NO EXPLANATIONS
-NO "Here's the analysis" or "Analyzing the files"
-JUST THE JSON ARRAY.
+CRITICAL: For each issue, you MUST provide a "patch" field in PROPER GIT DIFF FORMAT:
 
-You are a Senior Principal Backend Engineer focusing on observability and monitoring in a high-performance NestJS microservices architecture.
+## Git Diff Format Rules (MANDATORY):
 
-Analyze each file separately ONLY for missing logging and monitoring instrumentation:
+1. Start with hunk header: `@@ -old_start,old_count +new_start,new_count @@`
+2. Removed lines MUST start with MINUS: `-old line`
+3. Added lines MUST start with PLUS: `+new line`
+4. Every line MUST have a prefix ( - or +)
+5. Line counts in header MUST match actual lines in hunk
 
-## Missing Log Statements
-- Identify methods/functions that perform important operations but lack log statements
-- Check if critical operations (database calls, external API calls, business logic) are logged
-- Verify logging at method entry/exit for important functions
-- Look for missing logs in error scenarios (catch blocks, error handling)
-- Check for missing logs in async operations and promises
-- Identify operations that could fail silently without logs
+## Line Count Rules:
+- old_count = context lines + removed lines
+- new_count = context lines + added lines
 
-## Distributed Tracing & Correlation
-- Check for missing correlation IDs in log statements
-- Verify that correlation IDs are propagated through async operations
-- Look for missing trace context in service-to-service calls
-- Check if correlation IDs are included in error logs
-- Verify logging context is maintained across the request lifecycle
-
-## Performance Metrics & Timing
-- Identify operations that should have performance timing logs (database queries, API calls, business operations)
-- Check for missing duration/latency metrics in critical paths
-- Look for missing performance counters (RPS, throughput)
-- Verify timing logs for operations that could be bottlenecks
-- Check for missing SLA/SLO monitoring logs
-
-## Error Context & Debugging
-- Verify error logs include sufficient context (parameters, state, user context)
-- Check if error logs include stack traces
-- Look for missing request/response logging in error scenarios
-- Verify error logs include identifiers for troubleshooting (entity IDs, user IDs, request IDs)
-- Check for proper error severity levels (error vs warn vs info)
-
-## Structured Logging
-- Check if logs use structured format (JSON) vs string concatenation
-- Verify logs include relevant metadata fields
-- Look for missing key fields (timestamp, service name, environment)
-- Check for inconsistent logging patterns across the file
-- Verify proper use of log levels (debug, info, warn, error)
-
-## Business Metrics & Audit Trail
-- Identify business operations that should be logged for analytics (user actions, transactions, state changes)
-- Check for missing audit trail logs (who did what and when)
-- Look for missing logs for compliance/regulatory requirements
-- Verify important state changes are logged
-- Check for missing logs in batch operations or background jobs
-
-## Kafka/Event Processing Monitoring (if applicable)
-- Check for missing logs when consuming messages
-- Verify message processing success/failure is logged
-- Look for missing consumer lag metrics
-- Check for missing logs in retry scenarios
-- Verify dead letter queue operations are logged
-
-## Database Operation Monitoring
-- Check for missing logs before/after database operations
-- Verify slow query detection and logging
-- Look for missing logs for bulk operations
-- Check for missing transaction logs (start, commit, rollback)
-- Verify connection pool metrics are logged
-
-Please provide:
-1. A severity rating for each missing log/monitoring issue:
-   - CRITICAL: Missing logs that prevent troubleshooting production issues or violate compliance
-   - HIGH: Missing logs for important operations that significantly hinder debugging
-   - MEDIUM: Missing logs that would improve observability but aren't critical
-   - LOW: Nice-to-have logs for additional context
-
-2. Specific line numbers or method names where logs are missing
-
-3. PURE CODE recommendation:
-   - The "recommendation" field MUST contain ONLY executable code
-   - NO explanatory text like "Add this:", "You should:", etc.
-   - NO descriptions or comments about what to do
-   - ONLY the exact code statement(s) to add
-   - Example GOOD: logger.error('user_deletion_failed', { userId, error: error.message });
-   - Example BAD: Add error logging before re-throwing: logger.error(...)
-
-4. UNIFIED DIFF PATCH (REQUIRED):
-   ⚠️ EVERY LINE IN THE PATCH MUST START WITH ONE OF THESE AT COLUMN 1:
-   - Space character (0x20) for context lines (unchanged lines)
-   - Plus character (+) for added lines  
-   - Minus character (-) for removed lines
-   
-   Rules:
-   - Include 3 lines of context before and after the change
-   - Use proper unified diff format with @@ hunk headers
-   - Context lines: Start with SPACE then the code (e.g., " export function")
-   - Lines to add: Start with + then the code (e.g., "+logger.error(...)")
-   - Lines to remove: Start with - then the code (e.g., "-// old code")
-   - NO lines without a prefix character
-   - NO bare code without space/+/- prefix
-   
-   Example (note the space at start of context lines):
-     @@ -42,5 +42,7 @@
-      try {
-        data = await fetch();
-+} catch (error) {
-+  logger.error('Fetch failed', { error });
-      }
-      return data;
-   
-   In the example above:
-   - " try {" has a SPACE at column 1 (context line)
-   - "   data = await fetch();" has a SPACE at column 1 (context line)
-   - "+} catch (error) {" has a PLUS at column 1 (added line)
-   - "+  logger.error..." has a PLUS at column 1 (added line)
-   - " }" has a SPACE at column 1 (context line)
-   - "   return data;" has a SPACE at column 1 (context line)
-   
-   ❌ WRONG (no space prefix on context lines):
-     @@ -56,7 +56,7 @@
-       }
-       return null;
-     } catch (error) {
--      // old code
-+      logger.error(...);
-   
-   ✅ CORRECT (space prefix on ALL context lines):
-     @@ -56,7 +56,7 @@
-        }
-        return null;
-      } catch (error) {
--      // old code
-+      logger.error(...);
-   
-   The patch must be ready to apply with 'git apply' command
-
-4. Impact on debugging/monitoring if the log remains missing
-
-IMPORTANT: Limit your analysis to the TOP 5 MOST CRITICAL issues only per file. Focus on the most impactful missing logs.
-
-=== CRITICAL OUTPUT FORMAT REQUIREMENTS ===
-
-⚠️ YOUR RESPONSE MUST START WITH THE CHARACTER: [
-⚠️ YOUR RESPONSE MUST END WITH THE CHARACTER: ]
-⚠️ NOTHING BEFORE THE OPENING BRACKET [
-⚠️ NOTHING AFTER THE CLOSING BRACKET ]
-
-DO NOT WRITE:
-- ❌ "Analyzing the files..." 
-- ❌ "Here's the analysis:"
-- ❌ Any explanatory text
-- ❌ Markdown code blocks (```json)
-- ❌ Comments or descriptions
-- ❌ Newlines or whitespace before [
-
-THE VERY FIRST CHARACTER OF YOUR RESPONSE MUST BE: [
-THE VERY LAST CHARACTER OF YOUR RESPONSE MUST BE: ]
-
-Example of WRONG response:
-```
-Analyzing the files for missing logging...
-
-[{"file": "..."}]
+## Diff Example (CORRECT FORMAT):
+```plaintext
+@@ -7,3 +7,3 @@
+ export function errorHandler(err: Error, req: Request) {
+-  logger.error("Unhandled error:", err);
++  logger.error('Unhandled error:', { error: err.message, stack: err.stack, method: req.method, path: req.path });
+ }
 ```
 
-Example of CORRECT response:
-```
-[{"file": "..."}]
-```
+CRITICAL: Every line in the patch MUST start with space, -, or +. NO lines without prefixes!
 
-🚨 FINAL REMINDER: Start your response with [ - NO OTHER TEXT FIRST! 🚨
+## Analysis Focus Areas:
+1. **Correlation IDs**: Missing request/correlation IDs for tracing
+2. **Structured Logging**: Using string concatenation instead of structured fields
+3. **Error Context**: Missing stack traces, error details, request context
+4. **Performance Metrics**: Missing timing/duration logging
+5. **Log Levels**: Incorrect log levels for the operation
+6. **Sensitive Data**: Logging passwords, tokens, or PII
+7. **Missing Logs**: Critical operations without logging
 
-Return format (this is the ONLY valid format):
+## JSON Output Format:
+Return a JSON array with this EXACT structure:
+
+```json
 [
   {
-    "file": "path/to/file1.py",
+    "file": "path/to/file.ts",
     "analysis": {
       "issues": [
         {
           "severity": "CRITICAL|HIGH|MEDIUM|LOW",
-          "category": "missing-logs|correlation-id|performance-metrics|error-context|structured-logging|business-metrics|kafka-monitoring|database-monitoring",
-          "line": <line_number>,
-          "method": "method or function name where log is missing",
-          "description": "What log statement is missing and why it's needed",
-          "recommendation": "PURE CODE ONLY - the exact code to add (no explanatory text, no 'Add this', no descriptions, just the raw code)",
-          "patch": "Unified diff patch in standard format with @@ headers, ready to apply with git apply",
-          "impact": "Impact on debugging/monitoring/compliance if not added"
+          "category": "correlation-id|structured-logging|error-context|performance-metrics|log-level|sensitive-data|missing-logs",
+          "line": 123,
+          "method": "methodName",
+          "description": "Clear description of the issue",
+          "recommendation": "Exact code to use as replacement (single line or multi-line)",
+          "patch": "@@ -120,5 +120,5 @@\n context line\n context line\n-old code line\n+new code line\n context line\n context line",
+          "impact": "Business/technical impact of this issue"
         }
       ],
-      "summary": "Overall assessment of logging coverage in this file"
-    }
-  },
-  {
-    "file": "path/to/file2.py",
-    "analysis": {
-      "issues": [],
-      "summary": "Code looks good - no issues detected"
+      "summary": "Brief summary of all issues in this file"
     }
   }
 ]
+```
 
-=== FINAL REMINDER ===
+## Important Requirements:
+- **patch**: MUST be in proper git diff format with `+`, `-`, and space prefixes
+- **recommendation**: Should be the exact new code to use
+- **line**: Must be the exact line number where the issue exists
+- **severity**: Choose based on production impact (CRITICAL = breaks debugging, HIGH = missing important data, MEDIUM = suboptimal, LOW = minor improvement)
 
-🚨 THE FIRST CHARACTER YOU TYPE MUST BE: [
-🚨 THE LAST CHARACTER YOU TYPE MUST BE: ]
-🚨 DO NOT TYPE ANYTHING ELSE
+## Severity Guidelines:
+- **CRITICAL**: Missing correlation IDs, silent failures, errors without logging
+- **HIGH**: Missing error context, no structured logging, missing performance metrics
+- **MEDIUM**: Suboptimal log messages, missing optional context
+- **LOW**: Log message wording, minor improvements
 
-If your response contains ANY text before [ or after ], it will FAIL.
-If you write "Analyzing", "Here's", or any explanation, it will FAIL.
-
-VALID:   [{"file":"x.py",...}]
-INVALID: Analyzing...\n\n[{"file":"x.py",...}]
-
-START TYPING NOW WITH: [
-
-Your response:
-
+Analyze all provided files and return the complete JSON array. Ensure all patches use proper git diff format!

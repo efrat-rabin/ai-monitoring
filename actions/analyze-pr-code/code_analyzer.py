@@ -17,6 +17,15 @@ from typing import List, Dict, Any, Optional
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "libs"))
 from cursor_client import CursorClient
 
+# Import patch validation
+try:
+    sys.path.insert(0, str(Path(__file__).parent))
+    from validate_patch import validate_patch_format, fix_patch_format
+    PATCH_VALIDATION_AVAILABLE = True
+except ImportError:
+    PATCH_VALIDATION_AVAILABLE = False
+    print("Warning: Patch validation module not available")
+
 
 class CursorAnalyzer:
     """Handles file analysis using Cursor CLI."""
@@ -92,6 +101,10 @@ class CursorAnalyzer:
         
         try:
             result = self.cursor_client.send_message(prompt, context=context, verbose=verbose)
+            
+            # Validate and fix patches in the result
+            if PATCH_VALIDATION_AVAILABLE:
+                result = self._validate_and_fix_patches(result, verbose=verbose)
             
             # Parse result - handle various response formats
             if isinstance(result, list):
@@ -279,6 +292,45 @@ class CursorAnalyzer:
                 traceback.print_exc()
             return None
     
+    def _validate_and_fix_patches(self, result: Any, verbose: bool = False) -> Any:
+        """Validate and fix patch format in analysis results."""
+        if not PATCH_VALIDATION_AVAILABLE:
+            return result
+        
+        def fix_issues(issues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+            """Fix patches in a list of issues."""
+            fixed_issues = []
+            for issue in issues:
+                if 'patch' in issue and issue['patch']:
+                    patch = issue['patch']
+                    if not validate_patch_format(patch):
+                        if verbose:
+                            print(f"⚠️  Invalid patch format detected in {issue.get('method', 'unknown')}, attempting to fix...")
+                        fixed_patch = fix_patch_format(patch)
+                        if validate_patch_format(fixed_patch):
+                            issue['patch'] = fixed_patch
+                            if verbose:
+                                print(f"✅ Patch fixed successfully")
+                        else:
+                            if verbose:
+                                print(f"❌ Could not fix patch format")
+                fixed_issues.append(issue)
+            return fixed_issues
+        
+        # Handle different result structures
+        if isinstance(result, list):
+            for item in result:
+                if isinstance(item, dict) and 'analysis' in item:
+                    analysis = item['analysis']
+                    if isinstance(analysis, dict) and 'issues' in analysis:
+                        analysis['issues'] = fix_issues(analysis['issues'])
+        elif isinstance(result, dict):
+            if 'analysis' in result and isinstance(result['analysis'], dict):
+                if 'issues' in result['analysis']:
+                    result['analysis']['issues'] = fix_issues(result['analysis']['issues'])
+        
+        return result
+    
     def _load_mock_results(self) -> List[Dict[str, Any]]:
         """Load mock analysis results from file."""
         mock_file = Path(__file__).parent / "mock-analysis-results.json"
@@ -425,10 +477,10 @@ def main():
                        help='Output file for analysis results')
     parser.add_argument('--test-mode', action='store_true',
                        help='Use generated mock data instead of calling Cursor API')
-    parser.add_argument('--use-mock', action='store_true', default=True,
-                       help='Use predefined mock data from mock-analysis-results.json (default: True)')
-    parser.add_argument('--use-cursor', action='store_true',
-                       help='Use Cursor AI for analysis (requires CURSOR_API_KEY)')
+    parser.add_argument('--use-mock', action='store_true',
+                       help='Use predefined mock data from mock-analysis-results.json')
+    parser.add_argument('--use-cursor', action='store_true', default=True,
+                       help='Use Cursor AI for analysis (default: True)')
     
     args = parser.parse_args()
     
@@ -469,8 +521,8 @@ def main():
     cursor = CursorAnalyzer(cursor_api_key)
     
     # Determine which mode to use
-    # Priority: --use-cursor > --test-mode > --use-mock (default)
-    use_cursor = args.use_cursor and not args.test_mode
+    # Priority: --use-mock > --test-mode > --use-cursor (default)
+    use_cursor = not args.use_mock and not args.test_mode
     
     # Skip Cursor CLI setup in test mode or mock mode
     if use_cursor:
@@ -512,9 +564,7 @@ def main():
     
     # Analyze all files in one request
     print(f"\n=== Analyzing {len(changed_files)} files ===\n")
-    # If --use-cursor is set, don't use mock
-    use_mock_mode = not args.use_cursor and not args.test_mode
-    results = cursor.analyze_files(changed_files, prompt, test_mode=args.test_mode, use_mock=use_mock_mode, verbose=verbose)
+    results = cursor.analyze_files(changed_files, prompt, test_mode=args.test_mode, use_mock=args.use_mock, verbose=verbose)
     
     # Write results to file
     print(f"\n=== Analysis Complete ===")
