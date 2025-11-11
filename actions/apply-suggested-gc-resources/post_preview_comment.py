@@ -34,6 +34,8 @@ def post_preview_comment(github_token: str, repository: str, pr_number: int,
         image_data = f.read()
         image_base64 = base64.b64encode(image_data).decode('utf-8')
     
+    print(f"[INFO] Image size: {len(image_data)} bytes, base64 length: {len(image_base64)} chars")
+    
     if verbose:
         print(f"[DEBUG] Creating GitHub Gist with image...")
     
@@ -55,17 +57,26 @@ def post_preview_comment(github_token: str, repository: str, pr_number: int,
         }
     }
     
+    if verbose:
+        print(f"[DEBUG] Gist payload structure: public={gist_payload['public']}, files={list(gist_payload['files'].keys())}")
+    
+    print(f"[INFO] Creating GitHub Gist...")
+    
     # Create the gist
     gist_response = requests.post(gist_url, headers=gist_headers, json=gist_payload)
     
+    print(f"[INFO] Gist API response status: {gist_response.status_code}")
+    
     if verbose:
-        print(f"[DEBUG] Gist creation status: {gist_response.status_code}")
+        print(f"[DEBUG] Gist response headers: {dict(gist_response.headers)}")
     
     if gist_response.status_code != 201:
         # Fallback to markdown if gist creation fails
+        print(f"[ERROR] Gist creation failed with status {gist_response.status_code}")
+        print(f"[ERROR] Response body: {gist_response.text}")
+        
         if verbose:
-            print(f"[DEBUG] Gist creation failed: {gist_response.status_code}")
-            print(f"[DEBUG] Response: {gist_response.text}")
+            print(f"[DEBUG] Falling back to markdown format")
         
         # Use simple markdown format as fallback
         title = monitor.get('title', 'Monitor')
@@ -106,12 +117,23 @@ def post_preview_comment(github_token: str, repository: str, pr_number: int,
 _Preview by AI automation 🤖_"""
     else:
         # Gist created successfully - get the raw URL
+        print(f"[INFO] Gist created successfully!")
+        
         gist_data = gist_response.json()
-        image_url = gist_data['files']['monitor-preview.png']['raw_url']
         
         if verbose:
-            print(f"[DEBUG] Gist created successfully")
-            print(f"[DEBUG] Image URL: {image_url}")
+            print(f"[DEBUG] Gist response keys: {list(gist_data.keys())}")
+            print(f"[DEBUG] Gist files: {list(gist_data.get('files', {}).keys())}")
+        
+        print(f"[INFO] Gist ID: {gist_data.get('id')}")
+        print(f"[INFO] Gist URL: {gist_data.get('html_url')}")
+        
+        image_url = gist_data['files']['monitor-preview.png']['raw_url']
+        
+        print(f"[INFO] Image raw URL: {image_url}")
+        
+        if verbose:
+            print(f"[DEBUG] Full file data: {gist_data['files']['monitor-preview.png'].keys()}")
         
         # Create comment with gist image
         comment_body = f"""## 🔍 GroundCover Monitor Preview
@@ -123,6 +145,8 @@ _Preview by AI automation 🤖_"""
 **Reply with `/create-monitor` to create it.**
 
 _Preview by AI automation 🤖_"""
+        
+        print(f"[INFO] Comment will contain image from Gist")
     
     # Clean up image file
     if os.path.exists(image_path):
@@ -140,16 +164,24 @@ _Preview by AI automation 🤖_"""
         "in_reply_to": int(comment_id)
     }
     
+    print(f"[INFO] Posting comment to PR #{pr_number}")
+    print(f"[INFO] Comment will be reply to comment ID: {comment_id}")
+    print(f"[INFO] Comment body length: {len(comment_body)} chars")
+    
     if verbose:
-        print(f"[DEBUG] Posting preview comment")
         print(f"[DEBUG] Monitor: {title}")
-        print(f"[DEBUG] Payload: {json.dumps(payload, indent=2)}")
+        print(f"[DEBUG] Comment body preview: {comment_body[:200]}...")
     
     response = requests.post(url, headers=headers, json=payload)
     
+    print(f"[INFO] Comment API response status: {response.status_code}")
+    
     if verbose:
-        print(f"[DEBUG] Response status: {response.status_code}")
         print(f"[DEBUG] Response size: {len(response.content)} bytes")
+    
+    if response.status_code != 201:
+        print(f"[ERROR] Comment posting failed!")
+        print(f"[ERROR] Response: {response.text}")
     
     response.raise_for_status()
     
