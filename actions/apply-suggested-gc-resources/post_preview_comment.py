@@ -79,7 +79,7 @@ def extract_issue_data_from_comment(comment_body: str, verbose: bool = False) ->
 def post_preview_comment(github_token: str, repository: str, pr_number: int, 
                         comment_id: str, mock_monitor_path: str,
                         verbose: bool = False):
-    """Post a monitor preview comment as reply to the /generate-alerts comment."""
+    """Post a monitor preview comment as reply to the /generate-monitor comment."""
     owner, repo = repository.split("/")
     
     # Load mock monitor data for title

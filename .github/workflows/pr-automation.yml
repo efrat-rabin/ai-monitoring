@@ -267,11 +267,11 @@ jobs:
             --repository ${{ steps.pr_info.outputs.repository }} \
             --comment-id "${{ steps.post_processing.outputs.processing_comment_id }}"
 
-  # Generate alerts when developer comments /generate-alerts
-  generate-alerts:
+  # Generate monitor when developer comments /generate-monitor
+  generate-monitor:
     if: |
       github.event_name == 'pull_request_review_comment' &&
-      contains(github.event.comment.body, '/generate-alerts')
+      contains(github.event.comment.body, '/generate-monitor')
     runs-on: ubuntu-latest
     steps:
       - name: Get PR info

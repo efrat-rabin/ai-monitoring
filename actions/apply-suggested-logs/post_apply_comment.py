@@ -20,7 +20,7 @@ def post_comment(github_token: str, repository: str, pr_number: int, comment_id:
     comment_body += "**Dashboards** visualize metrics and trends over time.\n\n"
     comment_body += "Reply to this comment with:\n"
     comment_body += "```\n"
-    comment_body += "/generate-alerts     # Create monitoring alerts\n"
+    comment_body += "/generate-monitor    # Create monitoring alerts\n"
     comment_body += "/generate-dashboard # Create visualization dashboard\n"
     comment_body += "```\n\n"
     comment_body += "_Applied by SRE AI Bot 🤖_"
