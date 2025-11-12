@@ -1,7 +1,6 @@
 # Python dependencies for GitHub Actions
 requests>=2.31.0
 pyyaml>=6.0
-playwright>=1.40.0
 
 # Development dependencies (for testing)
 # pytest>=7.4.0
