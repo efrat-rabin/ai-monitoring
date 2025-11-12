@@ -53,6 +53,8 @@ def post_dashboard_preview(github_token: str, repository: str, pr_number: int,
     # Try to get issue-specific image from parent comment
     if parent_comment_id and analysis_results_path and os.path.exists(analysis_results_path):
         print(f"[INFO] Attempting to get issue-specific dashboard image")
+        print(f"[INFO] Parent comment ID: {parent_comment_id}")
+        print(f"[INFO] Analysis results path: {analysis_results_path}")
         
         # Get parent comment
         parent_url = f"https://api.github.com/repos/{owner}/{repo}/pulls/comments/{parent_comment_id}"
@@ -67,32 +69,52 @@ def post_dashboard_preview(github_token: str, repository: str, pr_number: int,
                 parent_comment = parent_response.json()
                 parent_body = parent_comment.get('body', '')
                 
-                if verbose:
-                    print(f"[DEBUG] Parent comment body preview: {parent_body[:200]}...")
+                print(f"[INFO] Parent comment body preview: {parent_body[:200]}...")
                 
                 # Load analysis results
                 with open(analysis_results_path, 'r') as f:
                     analysis_data = json.load(f)
                 
+                print(f"[INFO] Loaded analysis data with {len(analysis_data)} file(s)")
+                for idx, file_data in enumerate(analysis_data):
+                    file_path = file_data.get('file', 'unknown')
+                    issues_count = len(file_data.get('analysis', {}).get('issues', []))
+                    print(f"[INFO] File {idx+1}: {file_path} with {issues_count} issue(s)")
+                    
+                    # Log image fields for each issue
+                    for issue_idx, issue in enumerate(file_data.get('analysis', {}).get('issues', [])):
+                        monitor_img = issue.get('monitor_image', 'N/A')
+                        dashboard_img = issue.get('dashboard_image', 'N/A')
+                        severity = issue.get('severity', 'N/A')
+                        line = issue.get('line', 'N/A')
+                        print(f"[INFO]   Issue {issue_idx+1} (line {line}, {severity}): monitor_image={monitor_img}, dashboard_image={dashboard_img}")
+                
                 # Match parent comment to issue in analysis results
                 matched_issue = find_matching_issue(parent_body, analysis_data, verbose)
                 
-                if matched_issue and 'dashboard_image' in matched_issue:
-                    dashboard_image = matched_issue['dashboard_image']
-                    image_url = f"https://raw.githubusercontent.com/efrat-rabin/ai-monitoring/main{dashboard_image}"
-                    print(f"[INFO] Using issue-specific dashboard image: {dashboard_image}")
+                if matched_issue:
+                    print(f"[INFO] ✓ Matched issue found!")
+                    print(f"[INFO] Matched issue line: {matched_issue.get('line', 'N/A')}")
+                    print(f"[INFO] Matched issue severity: {matched_issue.get('severity', 'N/A')}")
+                    print(f"[INFO] Matched issue monitor_image: {matched_issue.get('monitor_image', 'N/A')}")
+                    print(f"[INFO] Matched issue dashboard_image: {matched_issue.get('dashboard_image', 'N/A')}")
+                    
+                    if 'dashboard_image' in matched_issue:
+                        dashboard_image = matched_issue['dashboard_image']
+                        image_url = f"https://raw.githubusercontent.com/efrat-rabin/ai-monitoring/main{dashboard_image}"
+                        print(f"[INFO] ✓ Using issue-specific dashboard image: {dashboard_image}")
+                    else:
+                        print(f"[WARN] Matched issue has no dashboard_image field, using default")
                 else:
-                    print(f"[INFO] No issue-specific dashboard image found, using default")
+                    print(f"[WARN] No matching issue found, using default image")
             else:
                 print(f"[WARN] Failed to get parent comment: {parent_response.status_code}")
         except Exception as e:
-            print(f"[WARN] Error getting issue-specific image: {e}")
-            if verbose:
-                import traceback
-                traceback.print_exc()
+            print(f"[ERROR] Error getting issue-specific image: {e}")
+            import traceback
+            traceback.print_exc()
     else:
-        if verbose:
-            print(f"[DEBUG] Using default image (parent_comment_id={parent_comment_id}, analysis_results_exists={os.path.exists(analysis_results_path) if analysis_results_path else False})")
+        print(f"[INFO] Using default image - parent_comment_id={parent_comment_id}, analysis_results_path={analysis_results_path}, exists={os.path.exists(analysis_results_path) if analysis_results_path else False}")
     
     print(f"[INFO] Using dashboard preview image: {image_url}")
     
