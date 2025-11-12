@@ -280,13 +280,6 @@ jobs:
           echo "pr_number=${{ inputs.pr_number || github.event.pull_request.number }}" >> $GITHUB_OUTPUT
           echo "repository=${{ inputs.repository || github.repository }}" >> $GITHUB_OUTPUT
       
-      - name: Checkout PR branch for analysis results
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ steps.pr_info.outputs.repository }}
-          ref: ${{ github.event.pull_request.head.ref }}
-          path: pr-branch
-      
       - name: Checkout workflow repository
         uses: actions/checkout@v4
         with:
@@ -315,7 +308,7 @@ jobs:
             --comment-id "${{ github.event.comment.id }}" \
             --parent-comment-id "${{ github.event.comment.in_reply_to_id }}" \
             --mock-monitor .ai-monitoring/actions/apply-suggested-gc-resources/mock-monitor.yaml \
-            --analysis-results pr-branch/analysis-results.json
+            --analysis-results .ai-monitoring/actions/analyze-pr-code/demo-mock-entity-processor.json
 
   # Create monitor when developer comments /create-monitor
   create-monitor:
@@ -369,13 +362,6 @@ jobs:
           echo "pr_number=${{ inputs.pr_number || github.event.pull_request.number }}" >> $GITHUB_OUTPUT
           echo "repository=${{ inputs.repository || github.repository }}" >> $GITHUB_OUTPUT
       
-      - name: Checkout PR branch for analysis results
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ steps.pr_info.outputs.repository }}
-          ref: ${{ github.event.pull_request.head.ref }}
-          path: pr-branch
-      
       - name: Checkout workflow repository
         uses: actions/checkout@v4
         with:
@@ -402,7 +388,7 @@ jobs:
             --repository ${{ steps.pr_info.outputs.repository }} \
             --comment-id "${{ github.event.comment.id }}" \
             --parent-comment-id "${{ github.event.comment.in_reply_to_id }}" \
-            --analysis-results pr-branch/analysis-results.json
+            --analysis-results .ai-monitoring/actions/analyze-pr-code/demo-mock-entity-processor.json
 
   # Create dashboard when developer comments /create-dashboard
   create-dashboard:
