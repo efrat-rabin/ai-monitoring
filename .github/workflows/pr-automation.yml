@@ -361,3 +361,81 @@ jobs:
             --pr-number ${{ steps.pr_info.outputs.pr_number }} \
             --repository ${{ steps.pr_info.outputs.repository }} \
             --comment-id "${{ github.event.comment.id }}"
+
+  # Generate dashboard when developer comments /generate-dashboard
+  generate-dashboard:
+    if: |
+      github.event_name == 'pull_request_review_comment' &&
+      contains(github.event.comment.body, '/generate-dashboard')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get PR info
+        id: pr_info
+        run: |
+          echo "pr_number=${{ inputs.pr_number || github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          echo "repository=${{ inputs.repository || github.repository }}" >> $GITHUB_OUTPUT
+      
+      - name: Checkout workflow repository
+        uses: actions/checkout@v4
+        with:
+          repository: efrat-rabin/ai-monitoring
+          path: .ai-monitoring
+          ref: main
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          cd .ai-monitoring
+          pip install -r requirements.txt
+      
+      - name: Post dashboard preview
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python .ai-monitoring/actions/apply-suggested-gc-resources/post_dashboard_preview.py \
+            --pr-number ${{ steps.pr_info.outputs.pr_number }} \
+            --repository ${{ steps.pr_info.outputs.repository }} \
+            --comment-id "${{ github.event.comment.id }}"
+
+  # Create dashboard when developer comments /create-dashboard
+  create-dashboard:
+    if: |
+      github.event_name == 'pull_request_review_comment' &&
+      contains(github.event.comment.body, '/create-dashboard')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get PR info
+        id: pr_info
+        run: |
+          echo "pr_number=${{ inputs.pr_number || github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          echo "repository=${{ inputs.repository || github.repository }}" >> $GITHUB_OUTPUT
+      
+      - name: Checkout workflow repository
+        uses: actions/checkout@v4
+        with:
+          repository: efrat-rabin/ai-monitoring
+          path: .ai-monitoring
+          ref: main
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          cd .ai-monitoring
+          pip install -r requirements.txt
+      
+      - name: Post dashboard creation response
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python .ai-monitoring/actions/apply-suggested-gc-resources/post_create_dashboard_response.py \
+            --pr-number ${{ steps.pr_info.outputs.pr_number }} \
+            --repository ${{ steps.pr_info.outputs.repository }} \
+            --comment-id "${{ github.event.comment.id }}"
