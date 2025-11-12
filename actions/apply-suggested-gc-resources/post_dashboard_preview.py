@@ -145,6 +145,8 @@ _Preview by AI automation 🤖_"""
     
     print(f"[INFO] Posting comment to PR #{pr_number}")
     print(f"[INFO] Comment will be reply to comment ID: {comment_id}")
+    print(f"[INFO] URL: {url}")
+    print(f"[INFO] Payload: {json.dumps(payload, indent=2)}")
     
     if verbose:
         print(f"[DEBUG] Comment body length: {len(comment_body)} chars")
@@ -155,7 +157,13 @@ _Preview by AI automation 🤖_"""
     
     if response.status_code != 201:
         print(f"[ERROR] Comment posting failed!")
-        print(f"[ERROR] Response: {response.text}")
+        print(f"[ERROR] Response status: {response.status_code}")
+        print(f"[ERROR] Response body: {response.text}")
+        try:
+            error_data = response.json()
+            print(f"[ERROR] Error details: {json.dumps(error_data, indent=2)}")
+        except:
+            pass
     
     response.raise_for_status()
     
@@ -201,11 +209,19 @@ def main():
             verbose=verbose
         )
         return 0
+    except requests.exceptions.HTTPError as e:
+        print(f"ERROR: HTTP Error posting dashboard preview: {e}")
+        print(f"ERROR: Status code: {e.response.status_code if e.response else 'N/A'}")
+        if e.response:
+            print(f"ERROR: Response body: {e.response.text}")
+        import traceback
+        traceback.print_exc()
+        return 1
     except Exception as e:
         print(f"ERROR: Failed to post dashboard preview: {e}")
-        if verbose:
-            import traceback
-            traceback.print_exc()
+        print(f"ERROR: Exception type: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
         return 1
 
 

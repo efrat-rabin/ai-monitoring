@@ -38,16 +38,26 @@ def post_comment(github_token: str, repository: str, pr_number: int, comment_id:
     if comment_id:
         payload["in_reply_to"] = int(comment_id)
     
+    print(f"[INFO] Posting comment to PR #{pr_number}")
+    print(f"[INFO] URL: {url}")
+    print(f"[INFO] Payload: {json.dumps(payload, indent=2)}")
+    
     if verbose:
-        print(f"[DEBUG] API Request: POST {url}")
         print(f"[DEBUG] Headers: Authorization=Bearer *****, Accept={headers['Accept']}")
-        print(f"[DEBUG] Payload: {json.dumps(payload, indent=2)}")
     
     response = requests.post(url, headers=headers, json=payload)
     
-    if verbose:
-        print(f"[DEBUG] Response status: {response.status_code}")
-        print(f"[DEBUG] Response size: {len(response.content)} bytes")
+    print(f"[INFO] Response status: {response.status_code}")
+    
+    if response.status_code != 201:
+        print(f"[ERROR] Failed to post comment!")
+        print(f"[ERROR] Response status: {response.status_code}")
+        print(f"[ERROR] Response body: {response.text}")
+        try:
+            error_data = response.json()
+            print(f"[ERROR] Error details: {json.dumps(error_data, indent=2)}")
+        except:
+            pass
     
     response.raise_for_status()
     
@@ -89,11 +99,19 @@ def main():
         if verbose:
             print(f"[DEBUG] Successfully completed post_apply_comment.py")
         return 0
+    except requests.exceptions.HTTPError as e:
+        print(f"ERROR: HTTP Error posting comment: {e}")
+        print(f"ERROR: Status code: {e.response.status_code if e.response else 'N/A'}")
+        if e.response:
+            print(f"ERROR: Response body: {e.response.text}")
+        import traceback
+        traceback.print_exc()
+        return 1
     except Exception as e:
         print(f"ERROR: Failed to post comment: {e}")
-        if verbose:
-            import traceback
-            traceback.print_exc()
+        print(f"ERROR: Exception type: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
         return 1
 
 
