@@ -14,7 +14,7 @@
           "impact": "When batch processing fails, there is no visibility into which entity type or batch caused the failure, making debugging production issues extremely difficult.",
           "commit_message": "🤖 Add error logging for batch processing failures",
           "monitor_image": "/assets/1_monitor.png",
-          "dashboard_image": "/assets/dashboard-preview.png"
+          "dashboard_image": "/assets/default.png"
         },
         {
           "severity": "MEDIUM",
@@ -26,8 +26,8 @@
           "patch": "@@ -18,6 +19,7 @@\n             const success = await formatEntities(batch);\n             if (!success) {\n                 logger.error('batch_failed', { entityType, batchSize: batch.length, skip });\n                 return false;\n             }\n+            logger.info('processed_batch', { entityType, entitiesProcessed: batch.length, skip });\n \n             skip += batchSize;",
           "impact": "Cannot monitor batch processing progress, throughput, or identify performance bottlenecks per entity type in production.",
           "commit_message": "🤖 Add progress logging for batch processing",
-          "monitor_image": "/assets/monitor-preview.png",
-          "dashboard_image": "/assets/dashboard-preview.png"
+          "monitor_image": "/assets/default.png",
+          "dashboard_image": "/assets/default.png"
         },
         {
           "severity": "MEDIUM",
@@ -39,8 +39,8 @@
           "patch": "@@ -24,6 +24,7 @@\n             skip += batchSize;\n             hasMore = batch.length === batchSize;\n         }\n+        logger.info('completed_processing', { entityType, totalEntities: skip });\n \n         return true;\n     }",
           "impact": "Cannot track overall processing metrics per entity type, total entities processed, or confirm successful completion of processing jobs.",
           "commit_message": "🤖 Add completion logging for entity processing",
-          "monitor_image": "/assets/2_monitor.png",
-          "dashboard_image": "/assets/2_dashboard.png"
+          "monitor_image": "/assets/3-monitor.png",
+          "dashboard_image": "/assets/3-dashboard.png"
         }
       ],
       "summary": "Entity processor lacks critical logging for error tracking and observability. Missing logs for batch failures, batch completion, and overall processing completion. All logs should include entityType for better filtering and debugging."
