@@ -306,9 +306,7 @@ jobs:
             --pr-number ${{ steps.pr_info.outputs.pr_number }} \
             --repository ${{ steps.pr_info.outputs.repository }} \
             --comment-id "${{ github.event.comment.id }}" \
-            --parent-comment-id "${{ github.event.comment.in_reply_to_id }}" \
-            --mock-monitor .ai-monitoring/actions/apply-suggested-gc-resources/mock-monitor.yaml \
-            --analysis-results .ai-monitoring/actions/analyze-pr-code/demo-mock-entity-processor.json
+            --mock-monitor .ai-monitoring/actions/apply-suggested-gc-resources/mock-monitor.yaml
 
   # Create monitor when developer comments /create-monitor
   create-monitor:
@@ -386,9 +384,7 @@ jobs:
           python .ai-monitoring/actions/apply-suggested-gc-resources/post_dashboard_preview.py \
             --pr-number ${{ steps.pr_info.outputs.pr_number }} \
             --repository ${{ steps.pr_info.outputs.repository }} \
-            --comment-id "${{ github.event.comment.id }}" \
-            --parent-comment-id "${{ github.event.comment.in_reply_to_id }}" \
-            --analysis-results .ai-monitoring/actions/analyze-pr-code/demo-mock-entity-processor.json
+            --comment-id "${{ github.event.comment.id }}"
 
   # Create dashboard when developer comments /create-dashboard
   create-dashboard:

@@ -5,48 +5,84 @@ import os
 import sys
 import argparse
 import json
+import re
 import yaml
 import requests
 
 
-def find_matching_issue(comment_body: str, analysis_data: list, verbose: bool = False) -> dict:
-    """Find issue in analysis results that matches the parent comment."""
-    if verbose:
-        print(f"[DEBUG] Searching for matching issue in {len(analysis_data)} file(s)")
+def get_root_comment(github_token: str, repository: str, comment_id: int, verbose: bool = False) -> dict:
+    """Walk up the thread to find the first (root) comment."""
+    owner, repo = repository.split("/")
+    current_id = comment_id
+    visited = set()  # Prevent infinite loops
     
-    for file_data in analysis_data:
-        file_path = file_data.get('file', '')
-        issues = file_data.get('analysis', {}).get('issues', [])
+    print(f"[INFO] Walking up thread to find root comment, starting from comment #{current_id}")
+    
+    while current_id and current_id not in visited:
+        visited.add(current_id)
+        
+        url = f"https://api.github.com/repos/{owner}/{repo}/pulls/comments/{current_id}"
+        headers = {
+            "Authorization": f"Bearer {github_token}",
+            "Accept": "application/vnd.github+json",
+        }
+        
+        try:
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            comment = response.json()
+            
+            in_reply_to = comment.get('in_reply_to_id')
+            
+            if verbose:
+                print(f"[DEBUG] Comment #{current_id}, in_reply_to_id={in_reply_to}")
+            
+            # If this comment has no parent, it's the root
+            if not in_reply_to:
+                print(f"[INFO] ✓ Found root comment: #{current_id}")
+                return comment
+            
+            # Otherwise, move up to parent
+            print(f"[INFO] Moving up: #{current_id} -> #{in_reply_to}")
+            current_id = in_reply_to
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to get comment #{current_id}: {e}")
+            return None
+    
+    print(f"[WARN] Could not find root comment (loop or error)")
+    return None
+
+
+def extract_issue_data_from_comment(comment_body: str, verbose: bool = False) -> dict:
+    """Extract issue data from hidden JSON in comment."""
+    json_match = re.search(r'<!-- ISSUE_DATA: (.+?) -->', comment_body, re.DOTALL)
+    
+    if not json_match:
+        if verbose:
+            print(f"[DEBUG] No ISSUE_DATA found in comment")
+        return {}
+    
+    try:
+        raw_json = json_match.group(1)
+        issue_data = json.loads(raw_json)
         
         if verbose:
-            print(f"[DEBUG] Checking file: {file_path} with {len(issues)} issues")
+            print(f"[DEBUG] Extracted issue data with keys: {list(issue_data.keys())}")
         
-        for issue in issues:
-            # Match based on file path, line number, description
-            if file_path in comment_body:
-                line = issue.get('line')
-                description = issue.get('description', '')
-                
-                # Check if line number or description snippet is in comment
-                if (line and str(line) in comment_body) or (description[:50] in comment_body):
-                    if verbose:
-                        print(f"[DEBUG] Found matching issue at {file_path}:{line}")
-                    return issue
-    
-    if verbose:
-        print(f"[DEBUG] No matching issue found")
-    return None
+        return issue_data
+    except json.JSONDecodeError as e:
+        print(f"[ERROR] Failed to parse issue JSON: {e}")
+        return {}
 
 
 def post_preview_comment(github_token: str, repository: str, pr_number: int, 
                         comment_id: str, mock_monitor_path: str,
-                        parent_comment_id: str = None,
-                        analysis_results_path: str = None,
                         verbose: bool = False):
     """Post a monitor preview comment as reply to the /generate-alerts comment."""
     owner, repo = repository.split("/")
     
-    # Load mock monitor data
+    # Load mock monitor data for title
     with open(mock_monitor_path, 'r') as f:
         monitor = yaml.safe_load(f)
     
@@ -55,75 +91,42 @@ def post_preview_comment(github_token: str, repository: str, pr_number: int,
     print(f"[INFO] Preparing monitor preview for: {title}")
     
     # Default image URL
-    image_url = "https://raw.githubusercontent.com/efrat-rabin/ai-monitoring/main/assets/monitor_view.png"
+    image_url = "https://raw.githubusercontent.com/efrat-rabin/ai-monitoring/main/assets/default.png"
     
-    # Try to get issue-specific image from parent comment
-    if parent_comment_id and analysis_results_path and os.path.exists(analysis_results_path):
-        print(f"[INFO] Attempting to get issue-specific image")
-        print(f"[INFO] Parent comment ID: {parent_comment_id}")
-        print(f"[INFO] Analysis results path: {analysis_results_path}")
+    # Walk up thread to find root comment
+    root_comment = get_root_comment(github_token, repository, int(comment_id), verbose)
+    
+    if root_comment:
+        root_body = root_comment.get('body', '')
+        root_id = root_comment.get('id')
         
-        # Get parent comment
-        parent_url = f"https://api.github.com/repos/{owner}/{repo}/pulls/comments/{parent_comment_id}"
-        headers = {
-            "Authorization": f"Bearer {github_token}",
-            "Accept": "application/vnd.github+json",
-        }
+        print(f"[INFO] Root comment ID: {root_id}")
+        print(f"[INFO] Root comment body preview: {root_body[:200]}...")
         
-        try:
-            parent_response = requests.get(parent_url, headers=headers)
-            if parent_response.status_code == 200:
-                parent_comment = parent_response.json()
-                parent_body = parent_comment.get('body', '')
-                
-                print(f"[INFO] Parent comment body preview: {parent_body[:200]}...")
-                
-                # Load analysis results
-                with open(analysis_results_path, 'r') as f:
-                    analysis_data = json.load(f)
-                
-                print(f"[INFO] Loaded analysis data with {len(analysis_data)} file(s)")
-                for idx, file_data in enumerate(analysis_data):
-                    file_path = file_data.get('file', 'unknown')
-                    issues_count = len(file_data.get('analysis', {}).get('issues', []))
-                    print(f"[INFO] File {idx+1}: {file_path} with {issues_count} issue(s)")
-                    
-                    # Log image fields for each issue
-                    for issue_idx, issue in enumerate(file_data.get('analysis', {}).get('issues', [])):
-                        monitor_img = issue.get('monitor_image', 'N/A')
-                        dashboard_img = issue.get('dashboard_image', 'N/A')
-                        severity = issue.get('severity', 'N/A')
-                        line = issue.get('line', 'N/A')
-                        print(f"[INFO]   Issue {issue_idx+1} (line {line}, {severity}): monitor_image={monitor_img}, dashboard_image={dashboard_img}")
-                
-                # Match parent comment to issue in analysis results
-                matched_issue = find_matching_issue(parent_body, analysis_data, verbose)
-                
-                if matched_issue:
-                    print(f"[INFO] ✓ Matched issue found!")
-                    print(f"[INFO] Matched issue line: {matched_issue.get('line', 'N/A')}")
-                    print(f"[INFO] Matched issue severity: {matched_issue.get('severity', 'N/A')}")
-                    print(f"[INFO] Matched issue monitor_image: {matched_issue.get('monitor_image', 'N/A')}")
-                    print(f"[INFO] Matched issue dashboard_image: {matched_issue.get('dashboard_image', 'N/A')}")
-                    
-                    if 'monitor_image' in matched_issue:
-                        monitor_image = matched_issue['monitor_image']
-                        image_url = f"https://raw.githubusercontent.com/efrat-rabin/ai-monitoring/main{monitor_image}"
-                        print(f"[INFO] ✓ Using issue-specific monitor image: {monitor_image}")
-                    else:
-                        print(f"[WARN] Matched issue has no monitor_image field, using default")
-                else:
-                    print(f"[WARN] No matching issue found, using default image")
+        # Extract issue data from root comment
+        issue_data = extract_issue_data_from_comment(root_body, verbose)
+        
+        if issue_data:
+            print(f"[INFO] ✓ Extracted issue data")
+            print(f"[INFO] Issue severity: {issue_data.get('severity', 'N/A')}")
+            print(f"[INFO] Issue line: {issue_data.get('line', 'N/A')}")
+            print(f"[INFO] Issue monitor_image: {issue_data.get('monitor_image', 'N/A')}")
+            print(f"[INFO] Issue dashboard_image: {issue_data.get('dashboard_image', 'N/A')}")
+            
+            # Get monitor image from issue data
+            monitor_image = issue_data.get('monitor_image', '')
+            
+            if monitor_image:
+                image_url = f"https://raw.githubusercontent.com/efrat-rabin/ai-monitoring/main{monitor_image}"
+                print(f"[INFO] ✓ Using issue-specific monitor image: {monitor_image}")
             else:
-                print(f"[WARN] Failed to get parent comment: {parent_response.status_code}")
-        except Exception as e:
-            print(f"[ERROR] Error getting issue-specific image: {e}")
-            import traceback
-            traceback.print_exc()
+                print(f"[INFO] No monitor_image in issue data, using default")
+        else:
+            print(f"[WARN] No issue data found in root comment, using default image")
     else:
-        print(f"[INFO] Using default image - parent_comment_id={parent_comment_id}, analysis_results_path={analysis_results_path}, exists={os.path.exists(analysis_results_path) if analysis_results_path else False}")
+        print(f"[WARN] Could not find root comment, using default image")
     
-    print(f"[INFO] Using monitor preview image: {image_url}")
+    print(f"[INFO] Final monitor preview image: {image_url}")
     
     # Create comment with image
     comment_body = f"""## 🔍 GroundCover Monitor Preview
@@ -134,7 +137,7 @@ def post_preview_comment(github_token: str, repository: str, pr_number: int,
 
 **Reply with `/create-monitor` to create it.**
 
-_Preview by SRE AI Bot 🤖_"""
+_Preview by AI automation 🤖_"""
     
     # Use PR review comments API
     url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/comments"
@@ -180,12 +183,8 @@ def main():
     parser.add_argument("--pr-number", type=str, required=True)
     parser.add_argument("--repository", type=str, required=True)
     parser.add_argument("--comment-id", type=str, required=True)
-    parser.add_argument("--parent-comment-id", type=str, default=None,
-                       help="Parent comment ID containing issue data")
     parser.add_argument("--mock-monitor", type=str, 
                        default="actions/apply-suggested-gc-resources/mock-monitor.yaml")
-    parser.add_argument("--analysis-results", type=str, default=None,
-                       help="Path to analysis results JSON file")
     args = parser.parse_args()
     
     verbose = os.getenv('ACTIONS_STEP_DEBUG', 'false').lower() in ('true', '1')
@@ -195,9 +194,7 @@ def main():
         print(f"[DEBUG] PR Number: {args.pr_number}")
         print(f"[DEBUG] Repository: {args.repository}")
         print(f"[DEBUG] Comment ID: {args.comment_id}")
-        print(f"[DEBUG] Parent Comment ID: {args.parent_comment_id}")
         print(f"[DEBUG] Mock Monitor Path: {args.mock_monitor}")
-        print(f"[DEBUG] Analysis Results Path: {args.analysis_results}")
     
     github_token = os.getenv("GITHUB_TOKEN")
     if not github_token:
@@ -214,8 +211,6 @@ def main():
             int(args.pr_number), 
             args.comment_id,
             args.mock_monitor,
-            args.parent_comment_id,
-            args.analysis_results,
             verbose=verbose
         )
         
