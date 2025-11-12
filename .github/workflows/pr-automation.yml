@@ -162,21 +162,6 @@ jobs:
           echo "Comment in_reply_to_id: ${{ github.event.comment.in_reply_to_id }}"
           echo "Comment body: ${{ github.event.comment.body }}"
       
-      - name: Post processing acknowledgement
-        id: post_processing
-        continue-on-error: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          COMMENT_ID="${{ github.event.comment.id }}"
-          if [ -n "$COMMENT_ID" ]; then
-            export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
-            python .ai-monitoring/actions/apply-suggested-logs/post_processing_comment.py \
-              --pr-number ${{ steps.pr_info.outputs.pr_number }} \
-              --repository ${{ steps.pr_info.outputs.repository }} \
-              --comment-id "$COMMENT_ID"
-          fi
-      
       - name: Check if apply should be triggered
         id: check_apply
         env:

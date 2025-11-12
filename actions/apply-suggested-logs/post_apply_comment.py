@@ -21,7 +21,7 @@ def post_comment(github_token: str, repository: str, pr_number: int, comment_id:
     comment_body += "```\n"
     comment_body += "/generate-alerts\n"
     comment_body += "```\n\n"
-    comment_body += "_Applied by AI automation 🤖_"
+    comment_body += "_Applied by SRE AI Bot 🤖_"
     
     # Use PR review comments API to enable threaded replies
     url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/comments"

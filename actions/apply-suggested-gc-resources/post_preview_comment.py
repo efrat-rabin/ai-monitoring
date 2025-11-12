@@ -66,7 +66,7 @@ def post_preview_comment(github_token: str, repository: str, pr_number: int,
 
 **Reply with `/create-monitor` to create it.**
 
-_Preview by AI automation 🤖_"""
+_Preview by SRE AI Bot 🤖_"""
         
         print(f"[INFO] Comment will contain image from GitHub repo")
         
@@ -108,7 +108,7 @@ _Preview by AI automation 🤖_"""
 
 **Reply with `/create-monitor` to create it.**
 
-_Preview by AI automation 🤖_"""
+_Preview by SRE AI Bot 🤖_"""
         
         # Clean up temp image since we're not using it
         if os.path.exists(image_path):
