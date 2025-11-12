@@ -6,38 +6,38 @@
         {
           "severity": "HIGH",
           "category": "missing-logs",
-          "line": 25,
+          "line": 20,
           "method": "process",
-          "description": "Missing error log when batch processing fails. When formatEntities returns false, the failure is silently propagated without logging which batch caused the failure.",
-          "recommendation": "logger.error('batch_failed', { batchSize: batch.length, skip });",
-          "patch": "@@ -22,6 +22,7 @@\n             }\n \n             const success = await formatEntities(batch);\n             if (!success) {\n+                logger.error('batch_failed', { batchSize: batch.length, skip });\n                 return false;\n             }",
-          "impact": "When batch processing fails, there is no visibility into which batch caused the failure, making debugging production issues extremely difficult.",
+          "description": "Missing error log when batch processing fails. When formatEntities returns false, the failure is silently propagated without logging which batch caused the failure or which entity type was being processed.",
+          "recommendation": "logger.error('batch_failed', { entityType, batchSize: batch.length, skip });",
+          "patch": "@@ -17,6 +17,7 @@\n \n             const success = await formatEntities(batch);\n             if (!success) {\n+                logger.error('batch_failed', { entityType, batchSize: batch.length, skip });\n                 return false;\n             }",
+          "impact": "When batch processing fails, there is no visibility into which entity type or batch caused the failure, making debugging production issues extremely difficult.",
           "commit_message": "🤖 Add error logging for batch processing failures"
         },
         {
           "severity": "MEDIUM",
           "category": "missing-logs",
-          "line": 29,
+          "line": 24,
           "method": "process",
-          "description": "Missing success log after processing a batch. No visibility into batch processing progress or throughput metrics.",
-          "recommendation": "logger.info('processed_batch', { entitiesProcessed: batch.length, skip });",
-          "patch": "@@ -25,6 +26,7 @@\n             const success = await formatEntities(batch);\n             if (!success) {\n                 logger.error('batch_failed', { batchSize: batch.length, skip });\n                 return false;\n             }\n+            logger.info('processed_batch', { entitiesProcessed: batch.length, skip });\n \n             skip += batchSize;",
-          "impact": "Cannot monitor batch processing progress, throughput, or identify performance bottlenecks in production.",
+          "description": "Missing success log after processing a batch. No visibility into batch processing progress, throughput metrics, or which entity types are being processed.",
+          "recommendation": "logger.info('processed_batch', { entityType, entitiesProcessed: batch.length, skip });",
+          "patch": "@@ -18,6 +19,7 @@\n             const success = await formatEntities(batch);\n             if (!success) {\n                 logger.error('batch_failed', { entityType, batchSize: batch.length, skip });\n                 return false;\n             }\n+            logger.info('processed_batch', { entityType, entitiesProcessed: batch.length, skip });\n \n             skip += batchSize;",
+          "impact": "Cannot monitor batch processing progress, throughput, or identify performance bottlenecks per entity type in production.",
           "commit_message": "🤖 Add progress logging for batch processing"
         },
         {
           "severity": "MEDIUM",
           "category": "missing-logs",
-          "line": 35,
+          "line": 28,
           "method": "process",
-          "description": "Missing completion log after all batches are processed. No visibility into total entities processed or overall processing success.",
-          "recommendation": "logger.info('completed_processing', { totalEntities: skip });",
-          "patch": "@@ -28,7 +28,8 @@\n             logger.info('processed_batch', { entitiesProcessed: batch.length, skip });\n \n             skip += batchSize;\n             hasMore = batch.length === batchSize;\n         }\n+        logger.info('completed_processing', { totalEntities: skip });\n \n         return true;\n     }",
-          "impact": "Cannot track overall processing metrics, total entities processed, or confirm successful completion of processing jobs.",
+          "description": "Missing completion log after all batches are processed. No visibility into total entities processed per entity type or overall processing success.",
+          "recommendation": "logger.info('completed_processing', { entityType, totalEntities: skip });",
+          "patch": "@@ -24,6 +24,7 @@\n             skip += batchSize;\n             hasMore = batch.length === batchSize;\n         }\n+        logger.info('completed_processing', { entityType, totalEntities: skip });\n \n         return true;\n     }",
+          "impact": "Cannot track overall processing metrics per entity type, total entities processed, or confirm successful completion of processing jobs.",
           "commit_message": "🤖 Add completion logging for entity processing"
         }
       ],
-      "summary": "Entity processor lacks critical logging for error tracking and observability. Missing logs for batch failures, batch completion, and overall processing completion."
+      "summary": "Entity processor lacks critical logging for error tracking and observability. Missing logs for batch failures, batch completion, and overall processing completion. All logs should include entityType for better filtering and debugging."
     }
   }
 ]
