@@ -265,7 +265,7 @@ jobs:
           python .ai-monitoring/actions/apply-suggested-logs/post_apply_comment.py \
             --pr-number ${{ steps.pr_info.outputs.pr_number }} \
             --repository ${{ steps.pr_info.outputs.repository }} \
-            --comment-id "${{ steps.post_processing.outputs.processing_comment_id }}"
+            --comment-id "${{ github.event.comment.id }}"
 
   # Generate monitor when developer comments /generate-monitor
   generate-monitor:
