@@ -280,15 +280,7 @@ jobs:
           echo "pr_number=${{ inputs.pr_number || github.event.pull_request.number }}" >> $GITHUB_OUTPUT
           echo "repository=${{ inputs.repository || github.repository }}" >> $GITHUB_OUTPUT
       
-      - name: Checkout customer repository (for storing image)
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ steps.pr_info.outputs.repository }}
-          ref: ${{ github.event.pull_request.head.ref }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
-      
-      - name: Checkout workflow repository (for scripts)
+      - name: Checkout workflow repository
         uses: actions/checkout@v4
         with:
           repository: efrat-rabin/ai-monitoring
@@ -305,15 +297,7 @@ jobs:
           cd .ai-monitoring
           pip install -r requirements.txt
       
-      - name: Install Playwright browsers
-        run: playwright install chromium
-      
-      - name: Configure git for customer repo
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-      
-      - name: Generate and commit preview image
+      - name: Post monitor preview
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -322,19 +306,121 @@ jobs:
             --pr-number ${{ steps.pr_info.outputs.pr_number }} \
             --repository ${{ steps.pr_info.outputs.repository }} \
             --comment-id "${{ github.event.comment.id }}" \
-            --mock-monitor .ai-monitoring/actions/apply-suggested-gc-resources/mock-monitor.yaml \
-            --workflow-repo-path .
-      
-      - name: Push preview image to customer repo
+            --mock-monitor .ai-monitoring/actions/apply-suggested-gc-resources/mock-monitor.yaml
+
+  # Create monitor when developer comments /create-monitor
+  create-monitor:
+    if: |
+      github.event_name == 'pull_request_review_comment' &&
+      contains(github.event.comment.body, '/create-monitor')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get PR info
+        id: pr_info
         run: |
-          if [ -n "$(git status --porcelain)" ]; then
-            git add preview-images/
-            git commit -m "Add monitor preview image [skip ci]"
-            git push origin ${{ github.event.pull_request.head.ref }}
-            echo "Preview image committed and pushed to customer repo"
-          else
-            echo "No new preview image to commit"
-          fi
+          echo "pr_number=${{ inputs.pr_number || github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          echo "repository=${{ inputs.repository || github.repository }}" >> $GITHUB_OUTPUT
       
-      - name: Wait for GitHub to process the image
-        run: sleep 5
+      - name: Checkout workflow repository
+        uses: actions/checkout@v4
+        with:
+          repository: efrat-rabin/ai-monitoring
+          path: .ai-monitoring
+          ref: main
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          cd .ai-monitoring
+          pip install -r requirements.txt
+      
+      - name: Post monitor creation response
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python .ai-monitoring/actions/apply-suggested-gc-resources/post_create_monitor_response.py \
+            --pr-number ${{ steps.pr_info.outputs.pr_number }} \
+            --repository ${{ steps.pr_info.outputs.repository }} \
+            --comment-id "${{ github.event.comment.id }}"
+
+  # Generate dashboard when developer comments /generate-dashboard
+  generate-dashboard:
+    if: |
+      github.event_name == 'pull_request_review_comment' &&
+      contains(github.event.comment.body, '/generate-dashboard')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get PR info
+        id: pr_info
+        run: |
+          echo "pr_number=${{ inputs.pr_number || github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          echo "repository=${{ inputs.repository || github.repository }}" >> $GITHUB_OUTPUT
+      
+      - name: Checkout workflow repository
+        uses: actions/checkout@v4
+        with:
+          repository: efrat-rabin/ai-monitoring
+          path: .ai-monitoring
+          ref: main
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          cd .ai-monitoring
+          pip install -r requirements.txt
+      
+      - name: Post dashboard preview
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python .ai-monitoring/actions/apply-suggested-gc-resources/post_dashboard_preview.py \
+            --pr-number ${{ steps.pr_info.outputs.pr_number }} \
+            --repository ${{ steps.pr_info.outputs.repository }} \
+            --comment-id "${{ github.event.comment.id }}"
+
+  # Create dashboard when developer comments /create-dashboard
+  create-dashboard:
+    if: |
+      github.event_name == 'pull_request_review_comment' &&
+      contains(github.event.comment.body, '/create-dashboard')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get PR info
+        id: pr_info
+        run: |
+          echo "pr_number=${{ inputs.pr_number || github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          echo "repository=${{ inputs.repository || github.repository }}" >> $GITHUB_OUTPUT
+      
+      - name: Checkout workflow repository
+        uses: actions/checkout@v4
+        with:
+          repository: efrat-rabin/ai-monitoring
+          path: .ai-monitoring
+          ref: main
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          cd .ai-monitoring
+          pip install -r requirements.txt
+      
+      - name: Post dashboard creation response
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python .ai-monitoring/actions/apply-suggested-gc-resources/post_create_dashboard_response.py \
+            --pr-number ${{ steps.pr_info.outputs.pr_number }} \
+            --repository ${{ steps.pr_info.outputs.repository }} \
+            --comment-id "${{ github.event.comment.id }}"
