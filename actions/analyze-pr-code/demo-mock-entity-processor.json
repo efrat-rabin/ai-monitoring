@@ -39,8 +39,8 @@
           "patch": "@@ -24,6 +24,7 @@\n             skip += batchSize;\n             hasMore = batch.length === batchSize;\n         }\n+        logger.info('completed_processing', { entityType, totalEntities: skip });\n \n         return true;\n     }",
           "impact": "Cannot track overall processing metrics per entity type, total entities processed, or confirm successful completion of processing jobs.",
           "commit_message": "🤖 Add completion logging for entity processing",
-          "monitor_image": "/assets/3-monitor.png",
-          "dashboard_image": "/assets/3-dashboard.png"
+          "monitor_image": "/assets/3_monitor.png",
+          "dashboard_image": "/assets/3_dashboard.png"
         }
       ],
       "summary": "Entity processor lacks critical logging for error tracking and observability. Missing logs for batch failures, batch completion, and overall processing completion. All logs should include entityType for better filtering and debugging."
