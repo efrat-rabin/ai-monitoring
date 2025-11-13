@@ -36,7 +36,7 @@
           "method": "process",
           "description": "Missing completion log after all batches are processed. No visibility into total entities processed per entity type or overall processing success.",
           "recommendation": "logger.info('completed_processing', { entityType, totalEntities: skip });",
-          "patch": "@@ -28,6 +30,7 @@\n             }\n             logger.info('processed_batch', { entityType, entitiesProcessed: batch.length, skip });\n \n             skip += batchSize;\n             hasMore = batch.length === batchSize;\n         }\n+        logger.info('completed_processing', { entityType, totalEntities: skip });\n \n         return true;",
+          "patch": "@@ -29,6 +31,7 @@\n             logger.info('processed_batch', { entityType, entitiesProcessed: batch.length, skip });\n \n             skip += batchSize;\n             hasMore = batch.length === batchSize;\n         }\n+        logger.info('completed_processing', { entityType, totalEntities: skip });\n \n         return true;\n     }",
           "impact": "Cannot track overall processing metrics per entity type, total entities processed, or confirm successful completion of processing jobs.",
           "commit_message": "🤖 Add completion logging for entity processing",
           "monitor_image": "/assets/3_monitor.png",
