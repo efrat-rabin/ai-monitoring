@@ -73,4 +73,3 @@ The mock data files are still present in the repository:
 - `demo-mock-entity-processor.json`
 
 To re-enable mock modes, search for "MOCK MODES - COMMENTED OUT" in `code_analyzer.py` and uncomment the relevant sections.
-

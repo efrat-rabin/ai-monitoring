@@ -10,7 +10,37 @@ import json
 import argparse
 import hashlib
 import requests
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
+
+
+SUMMARY_HEADER_MARKER = "<!-- ai-monitoring:analysis-summary -->"
+
+
+def build_analysis_summary_comment(
+    *,
+    commit_sha: str,
+    total_review_comments: int,
+    skipped_not_in_diff: int,
+) -> str:
+    """Build a stable PR summary comment that includes an idempotency marker.
+
+    The idempotency marker is used by workflows to detect whether a given head SHA
+    was already analyzed:
+      <!-- ai-monitoring:analysis:<sha> -->
+    """
+    short_sha = commit_sha[:7] if commit_sha else "unknown"
+    marker = f"<!-- ai-monitoring:analysis:{commit_sha} -->"
+
+    lines = [
+        SUMMARY_HEADER_MARKER,
+        marker,
+        "",
+        f"✅ Analysis completed for `{short_sha}`.",
+        "",
+        f"- Review comments posted: {total_review_comments}",
+        f"- Skipped (not in PR diff): {skipped_not_in_diff}",
+    ]
+    return "\n".join(lines).strip() + "\n"
 
 
 def compute_file_hash(file_path: str) -> str:
@@ -111,6 +141,87 @@ def post_issue_comment(
     except Exception as e:
         print(f"❌ Failed: {e}")
         return False
+
+
+def update_issue_comment(
+    github_token: str,
+    repository: str,
+    comment_id: int,
+    comment_body: str
+) -> bool:
+    """Update an existing issue comment on a GitHub PR."""
+    owner, repo = repository.split("/")
+    url = f"https://api.github.com/repos/{owner}/{repo}/issues/comments/{comment_id}"
+
+    headers = {
+        "Authorization": f"Bearer {github_token}",
+        "Accept": "application/vnd.github+json",
+    }
+
+    try:
+        response = requests.patch(url, headers=headers, json={"body": comment_body})
+        response.raise_for_status()
+        print(f"✅ Updated summary comment")
+        return True
+    except Exception as e:
+        print(f"❌ Failed to update summary comment: {e}")
+        return False
+
+
+def find_existing_summary_comment_id(
+    github_token: str,
+    repository: str,
+    pr_number: int
+) -> Optional[int]:
+    """Find the existing summary issue comment ID if present."""
+    owner, repo = repository.split("/")
+    base_url = f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_number}/comments"
+
+    headers = {
+        "Authorization": f"Bearer {github_token}",
+        "Accept": "application/vnd.github+json",
+    }
+
+    page = 1
+    per_page = 100
+    while True:
+        try:
+            response = requests.get(
+                base_url,
+                headers=headers,
+                params={"per_page": per_page, "page": page},
+                timeout=30
+            )
+            response.raise_for_status()
+            comments = response.json()
+        except Exception as e:
+            print(f"Warning: Could not list PR issue comments: {e}")
+            return None
+
+        if not comments:
+            return None
+
+        for comment in comments:
+            body = comment.get("body", "") or ""
+            if SUMMARY_HEADER_MARKER in body:
+                comment_id = comment.get("id")
+                if isinstance(comment_id, int):
+                    return comment_id
+
+        page += 1
+
+
+def upsert_summary_issue_comment(
+    github_token: str,
+    repository: str,
+    pr_number: int,
+    comment_body: str
+) -> bool:
+    """Create or update the stable summary issue comment."""
+    existing_id = find_existing_summary_comment_id(github_token, repository, pr_number)
+    if existing_id is not None:
+        return update_issue_comment(github_token, repository, existing_id, comment_body)
+    return post_issue_comment(github_token, repository, pr_number, comment_body)
 
 
 def get_pr_changed_lines(
@@ -272,7 +383,15 @@ def main():
     
     if skipped_not_in_diff > 0:
         print(f"\n⚠️ Skipped {skipped_not_in_diff} issue(s) not in PR diff")
-    
+
+    # Post/update a stable summary PR comment that includes the idempotency marker
+    summary_comment = build_analysis_summary_comment(
+        commit_sha=args.commit_sha,
+        total_review_comments=total_comments,
+        skipped_not_in_diff=skipped_not_in_diff,
+    )
+    upsert_summary_issue_comment(github_token, args.repository, pr_number, summary_comment)
+
     print(f"✅ Posted {total_comments} review comment(s) + 1 summary")
     return 0
 

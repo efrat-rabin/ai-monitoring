@@ -35,16 +35,84 @@ on:
 
 permissions:
   contents: write
+  issues: write
   pull-requests: write
 
 jobs:
+  # Gate analysis: only run once per PR head SHA
+  should-analyze:
+    if: |
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      !startsWith(github.event.head_commit.message, '🤖') &&
+      github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    outputs:
+      should_analyze: ${{ steps.check.outputs.should_analyze }}
+      pr_number: ${{ steps.pr_info.outputs.pr_number }}
+      repository: ${{ steps.pr_info.outputs.repository }}
+      head_sha: ${{ steps.pr_info.outputs.head_sha }}
+    steps:
+      - name: Get PR info
+        id: pr_info
+        run: |
+          echo "pr_number=${{ inputs.pr_number || github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          echo "repository=${{ inputs.repository || github.repository }}" >> $GITHUB_OUTPUT
+          echo "head_sha=${{ github.event.pull_request.head.sha }}" >> $GITHUB_OUTPUT
+
+      - name: Check if head SHA already analyzed
+        id: check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          REPO="${{ steps.pr_info.outputs.repository }}"
+          PR_NUMBER="${{ steps.pr_info.outputs.pr_number }}"
+          HEAD_SHA="${{ steps.pr_info.outputs.head_sha }}"
+
+          MARKER="<!-- ai-monitoring:analysis:${HEAD_SHA} -->"
+          echo "Looking for analysis marker: ${MARKER}"
+
+          FOUND="false"
+          PAGE=1
+
+          while true; do
+            RESP="$(curl -sS \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${REPO}/issues/${PR_NUMBER}/comments?per_page=100&page=${PAGE}")"
+
+            COUNT="$(echo "${RESP}" | jq 'length')"
+            if [ "${COUNT}" -eq 0 ]; then
+              break
+            fi
+
+            if echo "${RESP}" | jq -e --arg m "${MARKER}" '.[] | select(.body | contains($m))' >/dev/null; then
+              FOUND="true"
+              break
+            fi
+
+            PAGE=$((PAGE + 1))
+          done
+
+          if [ "${FOUND}" = "true" ]; then
+            echo "should_analyze=false" >> $GITHUB_OUTPUT
+            echo "Head SHA already analyzed; skipping analyze job."
+          else
+            echo "should_analyze=true" >> $GITHUB_OUTPUT
+            echo "Head SHA not yet analyzed; analyze job will run."
+          fi
+
   # Analyze when PR is opened/updated
   analyze:
     if: |
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       !startsWith(github.event.head_commit.message, '🤖') &&
-      github.actor != 'github-actions[bot]'
+      github.actor != 'github-actions[bot]' &&
+      needs.should-analyze.outputs.should_analyze == 'true'
+    needs: [should-analyze]
     runs-on: ubuntu-latest
     steps:
       - name: Get PR info
