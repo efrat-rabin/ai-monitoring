@@ -565,7 +565,7 @@ def main() -> int:
             updated += 1
 
         except Exception as e:
-            _log(f"❌ Failed to refresh comment #{comment.id}: {type(e).__name__}: {e}")
+            _log(f"❌ Failed to refresh comment #{comment.id} at {applied_file}:{line_int}: {type(e).__name__}: {e}")
             failed += 1
             continue
 
