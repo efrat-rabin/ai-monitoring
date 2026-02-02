@@ -1,39 +1,27 @@
 # Analyze PR Code - Usage Guide
 
 ## Overview
-This action analyzes PR code for logging improvements using either Cursor AI or mock data for testing.
+This action analyzes PR code diffs for logging improvements using Cursor AI. It focuses analysis on the actual changes made in the PR (not the entire files).
 
-## Modes of Operation
+## How It Works
 
-### 1. **Cursor AI Mode (Default)** ✅
-Uses real Cursor AI to analyze the code.
+1. **Fetches PR diff** - Gets the actual changes (patch) from GitHub API
+2. **Extracts context** - Reads surrounding lines from the changed files
+3. **Analyzes with AI** - Sends diff + context to Cursor AI for analysis
+4. **Filters results** - Only reports issues on lines that were actually changed
+
+## Usage
+
+### Basic Usage (Diff-based Analysis)
 
 ```bash
 python code_analyzer.py --pr-number 123 --repository owner/repo
 ```
 
-Or explicitly:
-```bash
-python code_analyzer.py --pr-number 123 --repository owner/repo --use-cursor
-```
-
-### 2. **Mock Data Mode** 📋
-Uses predefined analysis results from `mock-analysis-results.json`.
+### With Custom Context Lines
 
 ```bash
-python code_analyzer.py --pr-number 123 --repository owner/repo --use-mock
-```
-
-This is useful for:
-- Testing the comment posting functionality without using Cursor API credits
-- Demonstrating the workflow with known results
-- Development and debugging
-
-### 3. **Test Mode** 🧪
-Generates generic mock data based on the files in the PR.
-
-```bash
-python code_analyzer.py --pr-number 123 --repository owner/repo --test-mode
+python code_analyzer.py --pr-number 123 --repository owner/repo --context-lines 10
 ```
 
 ## Command-Line Arguments
@@ -44,45 +32,45 @@ python code_analyzer.py --pr-number 123 --repository owner/repo --test-mode
 | `--repository` | Repository (owner/repo format) | From `REPOSITORY` env var |
 | `--prompt-file` | Path to analysis prompt | `.ai-monitoring/.github/prompts/analyze-logs.txt` |
 | `--output-file` | Output file for results | `analysis-results.json` |
-| `--use-cursor` | Use Cursor AI (default) | `True` |
-| `--use-mock` | Use predefined mock data | `False` |
-| `--test-mode` | Use generated mock data | `False` |
+| `--context-lines` | Lines of context around changes | `5` |
 
 ## Environment Variables
 
 - `GITHUB_TOKEN` - GitHub API token (required)
-- `CURSOR_API_KEY` - Cursor API key (required for Cursor mode)
+- `CURSOR_API_KEY` - Cursor API key (required)
 - `PR_NUMBER` - Pull request number (alternative to --pr-number)
 - `REPOSITORY` - Repository name (alternative to --repository)
 - `VERBOSE` - Enable verbose output (`true`/`false`)
 
-## Mock Data File
-
-The mock data is stored in `mock-analysis-results.json` and contains sample analysis results for:
-- `apps/api/src/middleware/error-handler.ts`
-- `apps/api/src/services/cursor.service.ts`
-- `apps/api/src/services/github.service.ts`
-
-To update the mock data, edit this file with your desired analysis results.
-
 ## Examples
 
-### Quick test with mock data:
-```bash
-export GITHUB_TOKEN=ghp_...
-python code_analyzer.py --pr-number 123 --repository owner/repo --use-mock
-```
-
-### Full analysis with Cursor AI:
+### Analyze a PR:
 ```bash
 export GITHUB_TOKEN=ghp_...
 export CURSOR_API_KEY=sk-...
 python code_analyzer.py --pr-number 123 --repository owner/repo
 ```
 
-### Test mode (generates mock per file):
+### With more context (10 lines):
 ```bash
 export GITHUB_TOKEN=ghp_...
-python code_analyzer.py --pr-number 123 --repository owner/repo --test-mode
+export CURSOR_API_KEY=sk-...
+python code_analyzer.py --pr-number 123 --repository owner/repo --context-lines 10
 ```
+
+---
+
+## Mock Modes (Temporarily Disabled)
+
+The following mock modes have been **temporarily disabled** but the code is preserved (commented out) for future re-enablement if needed:
+
+- `--test-mode` - Generate mock data based on PR files
+- `--use-mock` - Use predefined mock data from `mock-analysis-results.json`
+- `--demo` - Use demo-specific mock data
+
+The mock data files are still present in the repository:
+- `mock-analysis-results.json`
+- `demo-mock-entity-processor.json`
+
+To re-enable mock modes, search for "MOCK MODES - COMMENTED OUT" in `code_analyzer.py` and uncomment the relevant sections.
 

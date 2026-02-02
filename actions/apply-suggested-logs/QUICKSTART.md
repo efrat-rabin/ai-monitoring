@@ -1,14 +1,14 @@
-# Apply Suggested Logs - Quick Start
+# Apply Suggested Logs - Quick Start (scripts)
 
 ## Overview
 
-This workflow automatically applies AI-suggested logging improvements to your code when triggered by a `/apply-logs` comment.
+These scripts apply logging improvements when triggered by a `/apply-logs` comment via `.github/workflows/pr-automation.yml`.
 
 ## How It Works
 
 1. **Analysis runs** on PR → Posts comment with logging issues
 2. **User reviews** and replies with `/apply-logs` 
-3. **Workflow applies** all suggested improvements automatically
+3. **`pr-automation.yml` applies** the suggested improvements automatically
 4. **Changes committed** to the PR branch
 
 ## Setup
@@ -18,11 +18,11 @@ This workflow automatically applies AI-suggested logging improvements to your co
 Add to your repository settings:
 
 - `BOT_GITHUB_TOKEN` - GitHub token with write access
-- `CURSOR_API_KEY` - Cursor AI API key
+- `CURSOR_API_KEY` - Used by analysis (this apply step is patch-based)
 
 ### Workflow Integration
 
-The workflow is designed to be called by a main orchestrator workflow when `/apply-logs` is detected in comments.
+The recommended integration is to use `.github/workflows/pr-automation.yml`, which handles both analysis and `/apply-logs` apply runs.
 
 ## Usage
 
@@ -35,7 +35,7 @@ The workflow is designed to be called by a main orchestrator workflow when `/app
 
 ## Files
 
-- `main.py` - Applies logging improvements using AI
+- `main.py` - Applies a patch embedded in the analysis comment
 - `check_apply_trigger.py` - Checks for `/apply-logs` in comments
 - `post_apply_comment.py` - Posts success comment
 - `.github/prompts/apply-logs.txt` - AI prompt template
@@ -65,13 +65,12 @@ The workflow is designed to be called by a main orchestrator workflow when `/app
 ## Testing Locally
 
 ```bash
-export CURSOR_API_KEY=your_key
 export GITHUB_TOKEN=your_token
 
 python main.py \
   --pr-number 123 \
   --repository owner/repo \
-  --analysis-results '$(cat analysis.json)'
+  --comment-body-file parent-comment.txt
 ```
 
 ## Notes

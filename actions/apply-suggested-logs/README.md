@@ -1,91 +1,47 @@
-# Apply Suggested Logs Action
+# Apply Suggested Logs (scripts)
 
-This action automatically applies AI-suggested logging improvements to your codebase.
+These scripts power the `/apply-logs` experience in `.github/workflows/pr-automation.yml`.
 
-## Overview
+There is **no standalone** `apply-suggested-logs.yml` workflow in this repository anymore; applying fixes is handled by the `apply-logs` job inside `pr-automation.yml`.
 
-The Apply Suggested Logs action takes analysis results from the code analysis workflow and uses AI to automatically apply the recommended logging improvements to your code files.
+## How it works
 
-## How It Works
+1. **Trigger**: A developer replies with `/apply-logs` on a PR review comment.
+2. **Trigger validation**: `check_apply_trigger.py` determines whether the reply should trigger an apply run and (when needed) loads the parent analysis comment.
+3. **Apply**: `main.py` reads the parent comment body and extracts hidden JSON metadata of the form `<!-- ISSUE_DATA: {...} -->`, including a unified diff patch.
+4. **Commit + notify**: The calling workflow commits/pushes changes and uses `post_apply_comment.py` to post a confirmation comment.
 
-1. **Triggered by Comment**: The workflow is triggered when someone replies to an analysis comment with `/apply-logs`
-2. **Receives Analysis Results**: Gets the JSON analysis results containing all logging issues and recommendations
-3. **AI-Powered Application**: Uses Cursor AI to intelligently apply the logging improvements while preserving code functionality
-4. **Automatic Commit**: Commits and pushes the changes to the PR branch
-5. **Success Comment**: Posts a comment on the PR confirming the changes were applied
+## Script inputs
 
-## Workflow Inputs
+### `main.py`
 
-### Required Inputs
+- `--pr-number` (required)
+- `--repository` (required, `owner/repo`)
+- `--comment-body` or `--comment-body-file` (required)
+- `--comment-id` (optional)
 
-- `pr_number`: Pull request number
-- `repository`: Repository in format `owner/repo`
-- `analysis_results`: JSON string containing the analysis results
-- `git_token`: GitHub token with write permissions
-- `cursor_api_key`: Cursor API key for AI-powered code modifications
+## Local testing
 
-### Optional Inputs
+To test locally, copy an analysis comment body (the one containing `<!-- ISSUE_DATA: ... -->`) into a file and run:
 
-- `comment_id`: ID of the comment that triggered the apply action (for tracking)
-
-## Analysis Results Format
-
-The action expects analysis results in the following JSON format:
-
-```json
-[
-  {
-    "file": "path/to/file.py",
-    "analysis": {
-      "issues": [
-        {
-          "severity": "CRITICAL",
-          "category": "structured-logging",
-          "line": 29,
-          "method": "function_name",
-          "description": "Description of the issue",
-          "recommendation": "Specific code recommendation",
-          "impact": "Impact of not fixing this issue"
-        }
-      ]
-    }
-  }
-]
+```bash
+cd actions/apply-suggested-logs
+python main.py \
+  --pr-number 123 \
+  --repository owner/repo \
+  --comment-body-file parent-comment.txt
 ```
-
-## Usage
-
-### Manual Trigger
-
-You can manually trigger the workflow from GitHub Actions:
-
-1. Go to Actions → Apply Suggested Logs
-2. Click "Run workflow"
-3. Fill in the required inputs
-4. Click "Run workflow"
-
-### Automatic Trigger (via Main Workflow)
-
-The workflow is designed to be triggered automatically by a main orchestrator workflow when:
-
-1. Code analysis has been completed
-2. A user replies to the analysis comment with `/apply-logs`
-3. The main workflow calls this workflow with the analysis results
 
 ## Scripts
 
 ### main.py
 
-The main script that applies logging improvements:
+The main script that applies a patch embedded in an analysis comment:
 
-- Parses analysis results JSON
-- Initializes Cursor AI client
-- For each file with issues:
-  - Reads the current file content
-  - Builds a prompt with all logging improvements
-  - Uses AI to generate improved code
-  - Writes the improved code back to the file
-- Reports summary of changes
+- Parses `<!-- ISSUE_DATA: ... -->` metadata from the comment body
+- Validates/fixes patch formatting (when validation utilities are available)
+- Applies the unified diff patch to the target file
+- Emits a commit message via workflow outputs (when running in GitHub Actions)
 
 ### check_apply_trigger.py
 
@@ -103,32 +59,6 @@ Posts a success comment after changes are applied:
 - Creates a formatted comment explaining what was changed
 - Posts to the PR
 - Includes next steps for the developer
-
-## Example Workflow Call
-
-```yaml
-jobs:
-  apply-logs:
-    uses: ./.github/workflows/apply-suggested-logs.yml
-    with:
-      pr_number: "123"
-      repository: "owner/repo"
-      analysis_results: ${{ needs.analyze.outputs.results }}
-      comment_id: "456"
-    secrets:
-      git_token: ${{ secrets.BOT_GITHUB_TOKEN }}
-      cursor_api_key: ${{ secrets.CURSOR_API_KEY }}
-```
-
-## AI Prompt Strategy
-
-The action uses a carefully crafted prompt that:
-
-1. **Preserves Functionality**: Instructs AI to only modify logging, not business logic
-2. **Maintains Formatting**: Keeps original code structure and indentation
-3. **Adds Imports**: Automatically adds necessary imports (logging, time, uuid, etc.)
-4. **Complete Output**: Requests full file content, not snippets
-5. **No Markdown**: Instructs AI to return pure code without markdown formatting
 
 ## Error Handling
 
@@ -152,9 +82,7 @@ The action produces:
 ## Requirements
 
 - Python 3.11+
-- Cursor CLI (automatically installed)
 - GitHub token with repository write access
-- Cursor API key
 
 ## Security Considerations
 
@@ -193,7 +121,5 @@ The action produces:
 
 - [ ] Support for selective application (apply only specific issues)
 - [ ] Dry-run mode to preview changes
-- [ ] Validation of generated code (syntax checking)
-- [ ] Support for multiple programming languages
 - [ ] Rollback mechanism for failed applications
 

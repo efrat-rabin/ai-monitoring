@@ -65,7 +65,9 @@ jobs:
         with:
           repository: efrat-rabin/ai-monitoring
           path: .ai-monitoring
-          ref: main
+          # If the calling repo is this repo (ai-monitoring), use the PR SHA so we test the PR's scripts.
+          # Otherwise (normal external usage), keep using the stable scripts from main.
+          ref: ${{ github.repository == 'efrat-rabin/ai-monitoring' && (github.event.pull_request.head.sha || github.sha) || 'main' }}
       
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -90,7 +92,8 @@ jobs:
           # Build command with appropriate flags
           CMD="python .ai-monitoring/actions/analyze-pr-code/code_analyzer.py \
             --pr-number ${{ steps.pr_info.outputs.pr_number }} \
-            --repository ${{ steps.pr_info.outputs.repository }}"
+            --repository ${{ steps.pr_info.outputs.repository }} \
+            --context-lines 1"
           
           if [ "${{ inputs.demo }}" = "true" ]; then
             CMD="$CMD --demo"
@@ -143,7 +146,9 @@ jobs:
         with:
           repository: efrat-rabin/ai-monitoring
           path: .ai-monitoring
-          ref: main
+          # If the calling repo is this repo (ai-monitoring), use the PR SHA so we test the PR's scripts.
+          # Otherwise (normal external usage), keep using the stable scripts from main.
+          ref: ${{ github.repository == 'efrat-rabin/ai-monitoring' && (github.event.pull_request.head.sha || github.sha) || 'main' }}
       
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -285,7 +290,9 @@ jobs:
         with:
           repository: efrat-rabin/ai-monitoring
           path: .ai-monitoring
-          ref: main
+          # If the calling repo is this repo (ai-monitoring), use the PR SHA so we test the PR's scripts.
+          # Otherwise (normal external usage), keep using the stable scripts from main.
+          ref: ${{ github.repository == 'efrat-rabin/ai-monitoring' && (github.event.pull_request.head.sha || github.sha) || 'main' }}
       
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -326,7 +333,9 @@ jobs:
         with:
           repository: efrat-rabin/ai-monitoring
           path: .ai-monitoring
-          ref: main
+          # If the calling repo is this repo (ai-monitoring), use the PR SHA so we test the PR's scripts.
+          # Otherwise (normal external usage), keep using the stable scripts from main.
+          ref: ${{ github.repository == 'efrat-rabin/ai-monitoring' && (github.event.pull_request.head.sha || github.sha) || 'main' }}
       
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -365,7 +374,9 @@ jobs:
         with:
           repository: efrat-rabin/ai-monitoring
           path: .ai-monitoring
-          ref: main
+          # If the calling repo is this repo (ai-monitoring), use the PR SHA so we test the PR's scripts.
+          # Otherwise (normal external usage), keep using the stable scripts from main.
+          ref: ${{ github.repository == 'efrat-rabin/ai-monitoring' && (github.event.pull_request.head.sha || github.sha) || 'main' }}
       
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -404,7 +415,9 @@ jobs:
         with:
           repository: efrat-rabin/ai-monitoring
           path: .ai-monitoring
-          ref: main
+          # If the calling repo is this repo (ai-monitoring), use the PR SHA so we test the PR's scripts.
+          # Otherwise (normal external usage), keep using the stable scripts from main.
+          ref: ${{ github.repository == 'efrat-rabin/ai-monitoring' && (github.event.pull_request.head.sha || github.sha) || 'main' }}
       
       - name: Set up Python
         uses: actions/setup-python@v4

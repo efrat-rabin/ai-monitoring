@@ -8,9 +8,7 @@ This repository contains GitHub Actions workflows for AI-powered code monitoring
 .
 ├── .github/
 │   └── workflows/          # GitHub Actions workflow definitions
-│       ├── analyze-pr-code.yml
-│       ├── apply-suggested-logs.yml
-│       └── apply-suggested-gc-resources.yml
+│       ├── pr-automation.yml
 ├── actions/                # Action implementation scripts
 │   ├── analyze-pr-code/
 │   │   ├── code_analyzer.py    # Full Cursor AI integration
@@ -31,70 +29,22 @@ This repository contains GitHub Actions workflows for AI-powered code monitoring
 
 ## Workflows
 
-### 1. Analyze PR Code
+### 1. Complete PR Automation (Recommended)
 
-**File:** `.github/workflows/analyze-pr-code.yml`
+**File:** `.github/workflows/pr-automation.yml`
 
-Analyzes pull request code using Cursor AI to provide insights and recommendations. The workflow:
-- Installs Cursor CLI
-- Gets changed files from the PR
-- Analyzes each file using a custom prompt
-- Uploads results as an artifact
-- Posts a comment on the PR with findings
+Automatically analyzes PRs and lets developers apply fixes by replying with `/apply-logs`.
 
-**Trigger:** `workflow_dispatch` (can be called from external workflows)
-
-**Inputs:**
-- `pr_number` - Pull request number (optional)
-- `repository` - Repository in format `owner/repo` (optional)
-- `cursor_api_key` - Cursor API key for AI analysis (optional, uses `CURSOR_API_KEY` secret by default)
+**Trigger:** `pull_request` + `pull_request_review_comment` (can also be called from external workflows)
 
 **Required Secrets:**
-- `BOT_GITHUB_TOKEN` - GitHub token with repo access (used automatically)
-- `CURSOR_API_KEY` - Cursor API key for AI analysis
-
-### 2. Apply Suggested Logs
-
-**File:** `.github/workflows/apply-suggested-logs.yml`
-
-Applies AI-suggested logging statements to the codebase.
-
-**Trigger:** `workflow_dispatch` (can be called from external workflows)
-
-**Inputs:**
-- `pr_number` - Pull request number (optional)
-- `repository` - Repository in format `owner/repo` (optional)
-- `git_token` - GitHub token for API access (required)
-
-### 3. Create Groundcover Alerts from Log Lines
-
-**File:** `actions/apply-suggested-gc-resources/main.py`
-
-Analyzes individual log lines using AI and automatically creates appropriate alerts in groundcover.
-
-**Features:**
-- Receives log lines as stringified JSON via command-line
-- Uses AI (Claude) to determine if an alert is warranted
-- Automatically creates alerts in groundcover via API
-- Supports dry-run mode for testing
-
-**Usage:**
-```bash
-python actions/apply-suggested-gc-resources/main.py \
-  --log-line '{"level":"error","message":"Database connection failed","service":"api"}'
-```
-
-**Required Environment Variables:**
-- `ANTHROPIC_API_KEY` - API key for Claude AI analysis
-- `GROUNDCOVER_API_KEY` - API key for groundcover
-
-See [detailed documentation](actions/apply-suggested-gc-resources/README.md) for more information.
+- `CURSOR_API_KEY` - Cursor API key for AI analysis (passed as `cursor_api_key`)
 
 ## Usage
 
 ### Using from External Repositories
 
-All workflows in this repository are designed to be called from external repositories as **reusable workflows**. This allows you to add AI-powered code analysis to any of your repositories without duplicating the automation logic.
+`pr-automation.yml` is designed to be called from external repositories as a **reusable workflow**. This allows you to add AI-powered PR automation to any of your repositories without duplicating the automation logic.
 
 **📘 For detailed setup instructions, examples, and troubleshooting, see [EXTERNAL_REPO_USAGE.md](EXTERNAL_REPO_USAGE.md)**
 
@@ -103,19 +53,17 @@ All workflows in this repository are designed to be called from external reposit
 In your external repository, create a workflow file (e.g., `.github/workflows/ai-analysis.yml`):
 
 ```yaml
-name: AI Code Analysis
+name: AI PR Automation
 
 on:
   pull_request:
     types: [opened, synchronize]
+  pull_request_review_comment:
+    types: [created]
 
 jobs:
-  analyze:
-    uses: your-org/ai-monitoring/.github/workflows/analyze-pr-code.yml@main
-    with:
-      pr_number: ${{ github.event.pull_request.number }}
-      repository: ${{ github.repository }}
-      post_comment: true
+  pr-automation:
+    uses: your-org/ai-monitoring/.github/workflows/pr-automation.yml@main
     secrets:
       cursor_api_key: ${{ secrets.CURSOR_API_KEY }}
 ```
@@ -144,78 +92,18 @@ jobs:
 
 This workflow combines analysis and automatic fix application in one package.
 
-**2. Analyze PR Code** - `.github/workflows/analyze-pr-code.yml`
-
-Analyzes pull request code using Cursor AI and posts findings as a comment.
-
-```yaml
-jobs:
-  analyze:
-    uses: your-org/ai-monitoring/.github/workflows/analyze-pr-code.yml@main
-    with:
-      pr_number: ${{ github.event.pull_request.number }}
-      repository: ${{ github.repository }}
-      post_comment: true        # Optional, default: true
-      test_mode: false           # Optional, default: false
-      verbose: true              # Optional, default: true
-    secrets:
-      cursor_api_key: ${{ secrets.CURSOR_API_KEY }}
-```
-
-**3. Apply Suggested Logs** - `.github/workflows/apply-suggested-logs.yml`
-
-Applies AI-suggested logging improvements to your code.
-
-```yaml
-jobs:
-  apply-logs:
-    uses: your-org/ai-monitoring/.github/workflows/apply-suggested-logs.yml@main
-    with:
-      pr_number: ${{ github.event.pull_request.number }}
-      repository: ${{ github.repository }}
-      comment_body: ${{ github.event.comment.body }}
-    secrets:
-      git_token: ${{ secrets.GITHUB_TOKEN }}
-      cursor_api_key: ${{ secrets.CURSOR_API_KEY }}
-```
-
-**4. Apply Suggested GC Resources** - `.github/workflows/apply-suggested-gc-resources.yml`
-
-Creates groundcover alerts from log lines using AI analysis.
-
-```yaml
-jobs:
-  create-alerts:
-    uses: your-org/ai-monitoring/.github/workflows/apply-suggested-gc-resources.yml@main
-    with:
-      repository: ${{ github.repository }}
-      log_line: '{"level":"error","message":"Database connection failed"}'
-    secrets:
-      anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-      groundcover_api_key: ${{ secrets.GROUNDCOVER_API_KEY }}
-```
-
 #### Required Secrets in Your External Repository
 
 To use these workflows from your repository, you need to configure the following secrets:
 
-1. **CURSOR_API_KEY** - For AI-powered code analysis (required for analyze and apply-logs workflows)
-2. **ANTHROPIC_API_KEY** - For Claude AI analysis (required for gc-resources workflow)
-3. **GROUNDCOVER_API_KEY** - For creating alerts in groundcover (required for gc-resources workflow)
-4. **BOT_GITHUB_TOKEN** (Optional) - GitHub PAT with repo access. If not provided, falls back to `GITHUB_TOKEN`
+1. **CURSOR_API_KEY** - For AI-powered code analysis (required)
+2. **BOT_GITHUB_TOKEN** (Optional) - GitHub PAT with repo access. If not provided, falls back to `GITHUB_TOKEN`
 
 **Note:** The ai-monitoring repository must be accessible to your external repository. For private repos, ensure the calling repository has access or use a BOT_GITHUB_TOKEN with appropriate permissions.
 
 #### Manual Trigger (Alternative)
 
-You can also manually trigger workflows using the GitHub CLI:
-
-```bash
-gh workflow run analyze-pr-code.yml \
-  --repo your-org/ai-monitoring \
-  -f pr_number=123 \
-  -f repository=your-org/your-repo
-```
+`pr-automation.yml` is intended to run on PR events; for local development/testing, run the scripts directly (see “Development” below).
 
 ## Development
 

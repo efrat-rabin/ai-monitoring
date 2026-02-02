@@ -1,20 +1,20 @@
 # Apply Suggested Logs - Workflow Guide
 
-This guide explains how the apply-suggested-logs workflow integrates with the main workflow and how to use it.
+This guide explains how the `actions/apply-suggested-logs/` scripts integrate with the main workflow (`.github/workflows/pr-automation.yml`) and how to use them.
 
 ## Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                         Main Workflow                            │
-│                     (orchestrator-example.yml)                   │
+│                       (pr-automation.yml)                         │
 └─────────────────────────────────────────────────────────────────┘
                                  │
                                  ├─── On PR Open/Update
                                  │
                     ┌────────────▼────────────┐
                     │  Analyze PR Code        │
-                    │  (analyze-pr-code.yml)  │
+                    │  (pr-automation job)    │
                     └────────────┬────────────┘
                                  │
                                  ├─── Generates analysis results
@@ -38,13 +38,8 @@ This guide explains how the apply-suggested-logs workflow integrates with the ma
                                  ├─── Trigger detected
                                  │
                     ┌────────────▼────────────┐
-                    │  Get Analysis Results   │
-                    │  (from artifacts)       │
-                    └────────────┬────────────┘
-                                 │
-                    ┌────────────▼────────────┐
                     │  Apply Suggested Logs   │
-                    │  (apply-suggested-logs) │
+                    │  (pr-automation job)    │
                     └────────────┬────────────┘
                                  │
                                  ├─── Applies changes
@@ -65,7 +60,7 @@ This guide explains how the apply-suggested-logs workflow integrates with the ma
 When a PR is opened or updated:
 
 1. **Trigger**: `pull_request` event (opened, synchronize)
-2. **Action**: `analyze-pr-code.yml` workflow runs
+2. **Action**: `pr-automation.yml` runs its `analyze` job
 3. **Output**: 
    - Analysis results saved as artifact
    - Comment posted on PR with findings
@@ -106,34 +101,22 @@ The AI will automatically apply all suggested improvements and commit them to th
 
 When a user replies to the analysis comment:
 
-1. **Trigger**: `issue_comment` event (created)
+1. **Trigger**: `pull_request_review_comment` event (created)
 2. **Check**: Comment body contains `/apply-logs`
 3. **Validation**: 
    - Comment is on a pull request
    - Comment contains the exact trigger phrase
 4. **Output**: Sets `should_apply` flag to true
 
-### Step 3: Retrieve Analysis Results
+### Step 3: Apply Changes
 
-If trigger is detected:
-
-1. **Download Artifact**: Gets `analysis-results.json` from the analyze workflow
-2. **Parse Results**: Reads and validates the JSON
-3. **Output**: Passes results to apply workflow
-
-### Step 4: Apply Changes
-
-The apply-suggested-logs workflow runs:
+The `apply-logs` job inside `pr-automation.yml` runs:
 
 1. **Checkout PR Branch**: Checks out the PR's head branch
 2. **Install Dependencies**: Sets up Python and installs requirements
 3. **Run Apply Script**: 
-   - Parses analysis results
-   - For each file with issues:
-     - Reads current content
-     - Builds AI prompt with all recommendations
-     - Uses Cursor AI to generate improved code
-     - Writes improved code back to file
+   - Loads the parent analysis comment body (the one containing hidden `ISSUE_DATA` JSON)
+   - Applies the unified diff patch embedded in that metadata
 4. **Commit Changes**: 
    - Stages all modified files
    - Creates commit with descriptive message
@@ -153,31 +136,20 @@ The apply-suggested-logs workflow runs:
 
 ### Example 2: Manual Trigger
 
-You can also manually trigger the apply workflow:
-
-```bash
-# Using GitHub CLI
-gh workflow run apply-suggested-logs.yml \
-  -f pr_number=123 \
-  -f repository=owner/repo \
-  -f analysis_results='[{"file":"test.py","analysis":{"issues":[...]}}]' \
-  -f git_token=$GITHUB_TOKEN \
-  -f cursor_api_key=$CURSOR_API_KEY
-```
+If you want to test the apply logic outside GitHub Actions, run `main.py` locally with a saved parent comment body (see Example 3).
 
 ### Example 3: Testing Locally
 
 ```bash
 # Set environment variables
 export GITHUB_TOKEN=your_token
-export CURSOR_API_KEY=your_key
 
 # Run the apply script
 cd actions/apply-suggested-logs
 python main.py \
   --pr-number 123 \
   --repository owner/repo \
-  --analysis-results "$(cat sample-analysis.json)"
+  --comment-body-file parent-comment.txt
 ```
 
 ## Configuration
@@ -217,9 +189,7 @@ actions/apply-suggested-logs/
 └── WORKFLOW_GUIDE.md          # This file
 
 .github/workflows/
-├── apply-suggested-logs.yml   # Apply workflow
-├── analyze-pr-code.yml        # Analysis workflow
-└── orchestrator-example.yml   # Example main workflow
+├── pr-automation.yml          # Orchestrates analysis + /apply-logs apply
 ```
 
 ## Input/Output Formats
