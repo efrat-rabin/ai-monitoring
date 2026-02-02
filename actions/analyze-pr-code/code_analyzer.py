@@ -95,7 +95,6 @@ class CursorAnalyzer:
     def install_cursor_cli(self) -> bool:
         """Install Cursor CLI if not already installed."""
         print("=== Installing Cursor CLI ===")
-        
         try:
             self.cursor_client = CursorClient(api_key=self.cursor_api_key)
             if self.cursor_client.install_cursor_cli():
@@ -752,9 +751,9 @@ class GitHubPRAnalyzer:
                 filename = file_info.get('filename', '')
                 patch = file_info.get('patch', '')
                 
-                # Include: added, modified, renamed, copied
-                # Exclude: removed, deleted
-                if status in ['added', 'modified', 'renamed', 'copied'] and filename:
+                # Include: added, modified, 
+                # Exclude: removed, deleted, renamed, copied
+                if status in ['added', 'modified'] and filename:
                     # Only analyze a strict whitelist of source files.
                     # Requested: js, ts, python (treat .jsx/.tsx as js/ts variants).
                     allowed_exts = {'.js', '.jsx', '.ts', '.tsx', '.py'}
