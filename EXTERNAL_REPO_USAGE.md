@@ -47,9 +47,7 @@ The workflow scripts are then executed against your repository's code, and any c
 │ AI-Monitoring Repo      │
 │                         │
 │ .github/workflows/      │
-│   ├── analyze-pr-code.yml      ← Reusable workflow
-│   ├── apply-suggested-logs.yml │
-│   └── apply-suggested-gc-resources.yml
+│   └── pr-automation.yml        ← Reusable workflow
 │                         │
 │ actions/                │
 │   ├── analyze-pr-code/  │
@@ -123,26 +121,6 @@ This single workflow provides:
 - Interactive fix application via `/apply-logs` comments
 - Automatic commit and push of fixes
 
-**Option B: Analysis Only**
-
-```yaml
-name: AI Code Analysis
-
-on:
-  pull_request:
-    types: [opened, synchronize]
-
-jobs:
-  analyze:
-    uses: your-org/ai-monitoring/.github/workflows/analyze-pr-code.yml@main
-    with:
-      pr_number: ${{ github.event.pull_request.number }}
-      repository: ${{ github.repository }}
-      post_comment: true
-    secrets:
-      cursor_api_key: ${{ secrets.CURSOR_API_KEY }}
-```
-
 **Important:** Replace `your-org/ai-monitoring` with the actual organization and repository name.
 
 ### Step 4: Create Prompt File (Optional)
@@ -193,7 +171,7 @@ jobs:
 
 ### Example 2: Full PR Automation (Manual Composition)
 
-If you prefer more control, you can compose the workflows yourself:
+If you prefer more control, start from `pr-automation.yml` and adapt it in your repository (it already includes both analysis and `/apply-logs` handling). The reusable “apply-only” workflow is not required when using `pr-automation.yml`.
 
 ```yaml
 name: PR Automation
@@ -205,58 +183,15 @@ on:
     types: [created]
 
 jobs:
-  # Analyze when PR is opened/updated
-  analyze:
-    if: github.event_name == 'pull_request'
-    uses: your-org/ai-monitoring/.github/workflows/analyze-pr-code.yml@main
-    with:
-      pr_number: ${{ github.event.pull_request.number }}
-      repository: ${{ github.repository }}
-      post_comment: true
+  pr-automation:
+    uses: your-org/ai-monitoring/.github/workflows/pr-automation.yml@main
     secrets:
-      cursor_api_key: ${{ secrets.CURSOR_API_KEY }}
-  
-  # Apply fixes when developer comments /apply-logs
-  apply-logs:
-    if: |
-      github.event_name == 'pull_request_review_comment' &&
-      contains(github.event.comment.body, '/apply-logs')
-    uses: your-org/ai-monitoring/.github/workflows/apply-suggested-logs.yml@main
-    with:
-      pr_number: ${{ github.event.pull_request.number }}
-      repository: ${{ github.repository }}
-      comment_body: ${{ github.event.comment.body }}
-      comment_id: ${{ github.event.comment.id }}
-    secrets:
-      git_token: ${{ secrets.GITHUB_TOKEN }}
       cursor_api_key: ${{ secrets.CURSOR_API_KEY }}
 ```
 
 ### Example 3: Manual Analysis Only
 
-Only run analysis when manually triggered:
-
-```yaml
-name: Manual Code Analysis
-
-on:
-  workflow_dispatch:
-    inputs:
-      pr_number:
-        description: 'PR Number to analyze'
-        required: true
-        type: string
-
-jobs:
-  analyze:
-    uses: your-org/ai-monitoring/.github/workflows/analyze-pr-code.yml@main
-    with:
-      pr_number: ${{ inputs.pr_number }}
-      repository: ${{ github.repository }}
-      post_comment: true
-    secrets:
-      cursor_api_key: ${{ secrets.CURSOR_API_KEY }}
-```
+If you need a manual “analysis only” workflow, copy the `analyze` job from `pr-automation.yml` into your repository and trigger it with `workflow_dispatch`.
 
 ### Example 4: Create Groundcover Alerts from Logs
 
@@ -282,12 +217,7 @@ jobs:
           echo 'log_line={"level":"error","message":"Database timeout","service":"api"}' >> $GITHUB_OUTPUT
       
       - name: Create alert
-        uses: your-org/ai-monitoring/.github/workflows/apply-suggested-gc-resources.yml@main
-        with:
-          log_line: ${{ steps.extract.outputs.log_line }}
-        secrets:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          groundcover_api_key: ${{ secrets.GROUNDCOVER_API_KEY }}
+        run: echo "This repository no longer provides a reusable GC-resources workflow; use your own logic or extend pr-automation.yml."
 ```
 
 ### Example 5: Test Mode for Development
@@ -302,13 +232,10 @@ on:
     branches: [develop]
 
 jobs:
-  analyze:
-    uses: your-org/ai-monitoring/.github/workflows/analyze-pr-code.yml@main
+  pr-automation:
+    uses: your-org/ai-monitoring/.github/workflows/pr-automation.yml@main
     with:
-      pr_number: ${{ github.event.pull_request.number }}
-      repository: ${{ github.repository }}
       test_mode: true  # Uses mock data instead of real AI
-      post_comment: true
     secrets:
       cursor_api_key: ${{ secrets.CURSOR_API_KEY }}
 ```
@@ -379,13 +306,13 @@ Note: The directory is named `.ai-monitoring` for compatibility, even though it 
 Instead of `@main`, you can pin to specific versions:
 
 ```yaml
-uses: your-org/ai-monitoring/.github/workflows/analyze-pr-code.yml@v1.0.0
+uses: your-org/ai-monitoring/.github/workflows/pr-automation.yml@v1.0.0
 ```
 
 Or use branches:
 
 ```yaml
-uses: your-org/ai-monitoring/.github/workflows/analyze-pr-code.yml@develop
+uses: your-org/ai-monitoring/.github/workflows/pr-automation.yml@develop
 ```
 
 ### Custom Prompt Files
@@ -417,7 +344,7 @@ Return JSON with:
 Only run analysis on specific paths:
 
 ```yaml
-name: Analyze Backend Only
+name: PR Automation (backend-only)
 
 on:
   pull_request:
@@ -426,11 +353,8 @@ on:
       - 'api/**'
 
 jobs:
-  analyze:
-    uses: your-org/ai-monitoring/.github/workflows/analyze-pr-code.yml@main
-    with:
-      pr_number: ${{ github.event.pull_request.number }}
-      repository: ${{ github.repository }}
+  pr-automation:
+    uses: your-org/ai-monitoring/.github/workflows/pr-automation.yml@main
     secrets:
       cursor_api_key: ${{ secrets.CURSOR_API_KEY }}
 ```
@@ -441,20 +365,16 @@ Run different types of analysis in parallel:
 
 ```yaml
 jobs:
-  analyze-logging:
-    uses: your-org/ai-monitoring/.github/workflows/analyze-pr-code.yml@main
-    with:
-      pr_number: ${{ github.event.pull_request.number }}
-      repository: ${{ github.repository }}
+  pr-automation-logging:
+    uses: your-org/ai-monitoring/.github/workflows/pr-automation.yml@main
+    # Use the default analyze prompt (logging-focused)
     secrets:
       cursor_api_key: ${{ secrets.CURSOR_API_KEY }}
   
-  analyze-security:
-    uses: your-org/ai-monitoring/.github/workflows/analyze-pr-code.yml@main
-    with:
-      pr_number: ${{ github.event.pull_request.number }}
-      repository: ${{ github.repository }}
-      # Use different prompt file for security analysis
+  pr-automation-security:
+    uses: your-org/ai-monitoring/.github/workflows/pr-automation.yml@main
+    # Provide a different `.github/prompts/analyze-logs.txt` in the repo,
+    # or extend the workflow if you need distinct prompt files per job.
     secrets:
       cursor_api_key: ${{ secrets.CURSOR_API_KEY }}
 ```
