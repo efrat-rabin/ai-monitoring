@@ -755,6 +755,14 @@ class GitHubPRAnalyzer:
                 # Include: added, modified, renamed, copied
                 # Exclude: removed, deleted
                 if status in ['added', 'modified', 'renamed', 'copied'] and filename:
+                    # Only analyze a strict whitelist of source files.
+                    # Requested: js, ts, python (treat .jsx/.tsx as js/ts variants).
+                    allowed_exts = {'.js', '.jsx', '.ts', '.tsx', '.py'}
+                    ext = Path(filename).suffix.lower()
+                    if ext not in allowed_exts:
+                        print(f"  - {filename} ({status}) - unsupported file type ({ext or 'no extension'}), skipping")
+                        continue
+
                     # Check if file exists locally
                     if not os.path.exists(filename):
                         print(f"  - {filename} ({status}) - file not found locally, skipping")
