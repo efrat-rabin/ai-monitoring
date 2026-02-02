@@ -33,6 +33,64 @@ class CursorAnalyzer:
     def __init__(self, cursor_api_key: Optional[str] = None):
         self.cursor_api_key = cursor_api_key or os.getenv('CURSOR_API_KEY')
         self.cursor_client = None
+
+    def _truncate_for_cli(self, text: str, max_chars: int, label: str, verbose: bool = False) -> str:
+        """Truncate very large prompt/context blocks to avoid OS argv limits.
+
+        This does not change the analysis prompt itself; it only limits the size of
+        contextual payload sent to the CLI.
+        """
+        if max_chars <= 0 or len(text) <= max_chars:
+            return text
+
+        suffix = f"\n\n...[TRUNCATED {label}: {len(text)} chars total]...\n"
+        keep = max(0, max_chars - len(suffix))
+        truncated = text[:keep] + suffix
+        if verbose:
+            print(f"[DEBUG] Truncated {label}: {len(text)} -> {len(truncated)} chars (limit {max_chars})")
+        return truncated
+
+    def _send_batched(self, prompt: str, base_context: str, file_chunks: List[Dict[str, Any]], verbose: bool = True) -> List[Dict[str, Any]]:
+        """Send analysis requests in batches to avoid 'Argument list too long'."""
+        if not self.cursor_client:
+            self.cursor_client = CursorClient(api_key=self.cursor_api_key)
+
+        # Keep well below typical Linux ARG_MAX (~2MB) since the CLI payload is passed as argv.
+        max_chars = int(os.getenv("CURSOR_AGENT_MAX_PROMPT_CHARS", "250000"))
+
+        all_results: List[Dict[str, Any]] = []
+        batch_context = base_context
+        batch_files: List[str] = []
+
+        def flush():
+            nonlocal batch_context, batch_files, all_results
+            if not batch_files:
+                return
+
+            result = self.cursor_client.send_message(prompt, context=batch_context, verbose=verbose)
+            if PATCH_VALIDATION_AVAILABLE:
+                result = self._validate_and_fix_patches(result, verbose=verbose)
+            all_results.extend(self._parse_analysis_result(result, batch_files, verbose))
+
+            batch_context = base_context
+            batch_files = []
+
+        for item in file_chunks:
+            file_path = item["file"]
+            chunk = item["chunk"]
+
+            # If a single chunk is too big, truncate it so the subprocess argv stays safe.
+            max_chunk_chars = max(1000, max_chars - len(base_context) - 1000)
+            chunk = self._truncate_for_cli(chunk, max_chunk_chars, label=f"context for {file_path}", verbose=verbose)
+
+            if (len(batch_context) + len(chunk)) > max_chars and batch_files:
+                flush()
+
+            batch_context += chunk
+            batch_files.append(file_path)
+
+        flush()
+        return all_results
         
     def install_cursor_cli(self) -> bool:
         """Install Cursor CLI if not already installed."""
@@ -85,42 +143,60 @@ class CursorAnalyzer:
         if not self.cursor_client:
             self.cursor_client = CursorClient(api_key=self.cursor_api_key)
         
-        # Build context with diffs and surrounding code
-        context = "Analyze the following PR DIFFS (not full files).\n"
-        context += "Focus ONLY on lines that were added/modified (lines starting with + in the diff).\n\n"
-        
-        for file_info in diff_data:
-            file_path = file_info['file']
-            patch = file_info.get('patch', '')
-            line_ranges = file_info.get('line_ranges', [])
-            added_lines = file_info.get('added_lines', [])
-            
-            context += f"=== FILE: {file_path} ===\n"
-            context += f"Status: {file_info.get('status', 'unknown')}\n"
-            
-            if added_lines:
-                context += f"Added/modified line numbers: {added_lines}\n"
-            
-            # Include the actual diff
-            if patch:
-                context += f"\n--- DIFF ---\n{patch}\n--- END DIFF ---\n"
-            
-            # Include surrounding context from the file
-            if line_ranges:
-                code_context = self._get_context_around_diff(file_path, line_ranges, context_lines)
-                context += f"\n--- CODE CONTEXT (with line numbers) ---\n{code_context}\n--- END CONTEXT ---\n"
-            
-            context += "\n"
-        
         try:
-            result = self.cursor_client.send_message(prompt, context=context, verbose=verbose)
-            
-            # Validate and fix patches in the result
-            if PATCH_VALIDATION_AVAILABLE:
-                result = self._validate_and_fix_patches(result, verbose=verbose)
-            
-            # Parse result using existing parsing logic
-            return self._parse_analysis_result(result, [f['file'] for f in diff_data], verbose)
+            base_context = (
+                "Analyze the following PR DIFFS (not full files).\n"
+                "Focus ONLY on lines that were added/modified (lines starting with + in the diff).\n\n"
+            )
+
+            # Keep well below typical Linux ARG_MAX (~2MB) since the CLI payload is passed as argv.
+            max_chars = int(os.getenv("CURSOR_AGENT_MAX_PROMPT_CHARS", "250000"))
+
+            all_results: List[Dict[str, Any]] = []
+
+            for file_info in diff_data:
+                file_path = file_info["file"]
+                patch = file_info.get("patch", "")
+                line_ranges = file_info.get("line_ranges", [])
+                added_lines = file_info.get("added_lines", [])
+
+                chunk = f"=== FILE: {file_path} ===\n"
+                chunk += f"Status: {file_info.get('status', 'unknown')}\n"
+                if added_lines:
+                    chunk += f"Added/modified line numbers: {added_lines}\n"
+
+                if patch:
+                    chunk += f"\n--- DIFF ---\n{patch}\n--- END DIFF ---\n"
+
+                if line_ranges:
+                    code_context = self._get_context_around_diff(file_path, line_ranges, context_lines)
+                    chunk += f"\n--- CODE CONTEXT (with line numbers) ---\n{code_context}\n--- END CONTEXT ---\n"
+
+                chunk += "\n"
+
+                # Ensure even a single file's payload can't exceed argv limits.
+                max_chunk_chars = max(1000, max_chars - len(base_context) - 1000)
+                chunk = self._truncate_for_cli(chunk, max_chunk_chars, label=f"context for {file_path}", verbose=verbose)
+
+                try:
+                    result = self.cursor_client.send_message(prompt, context=base_context + chunk, verbose=verbose)
+                    if PATCH_VALIDATION_AVAILABLE:
+                        result = self._validate_and_fix_patches(result, verbose=verbose)
+
+                    # Parse this file's response only. This avoids any cross-file ambiguity.
+                    parsed = self._parse_analysis_result(result, [file_path], verbose)
+                    all_results.extend(parsed)
+                except Exception as e:
+                    print(f"ERROR: Failed to analyze {file_path}: {e}")
+                    all_results.append({
+                        "file": file_path,
+                        "analysis": {
+                            "issues": [],
+                            "summary": f"Error analyzing file: {e}"
+                        }
+                    })
+
+            return all_results
                 
         except Exception as e:
             print(f"ERROR: Failed to analyze diffs: {e}")
@@ -311,30 +387,24 @@ class CursorAnalyzer:
         if not self.cursor_client:
             self.cursor_client = CursorClient(api_key=self.cursor_api_key)
         
-        # Build context with all files
-        context = "Analyze the following files:\n\n"
-        
-        for file_path in file_paths:
-            if not os.path.exists(file_path):
-                print(f"Skipping {file_path} - file not found")
-                continue
-            
-            try:
-                with open(file_path, 'r') as f:
-                    file_content = f.read()
-                context += f"=== FILE: {file_path} ===\n{file_content}\n\n"
-            except Exception as e:
-                print(f"Error reading {file_path}: {e}")
-        
         try:
-            result = self.cursor_client.send_message(prompt, context=context, verbose=verbose)
-            
-            # Validate and fix patches in the result
-            if PATCH_VALIDATION_AVAILABLE:
-                result = self._validate_and_fix_patches(result, verbose=verbose)
-            
-            # Use shared parsing logic
-            return self._parse_analysis_result(result, file_paths, verbose)
+            base_context = "Analyze the following files:\n\n"
+
+            file_chunks: List[Dict[str, Any]] = []
+            for file_path in file_paths:
+                if not os.path.exists(file_path):
+                    print(f"Skipping {file_path} - file not found")
+                    continue
+
+                try:
+                    with open(file_path, "r") as f:
+                        file_content = f.read()
+                    chunk = f"=== FILE: {file_path} ===\n{file_content}\n\n"
+                    file_chunks.append({"file": file_path, "chunk": chunk})
+                except Exception as e:
+                    print(f"Error reading {file_path}: {e}")
+
+            return self._send_batched(prompt, base_context, file_chunks, verbose=verbose)
                 
         except Exception as e:
             print(f"ERROR: Failed to analyze files: {e}")
@@ -738,8 +808,8 @@ def main():
     parser.add_argument('--output-file', type=str,
                        default='analysis-results.json',
                        help='Output file for analysis results')
-    parser.add_argument('--context-lines', type=int, default=5,
-                       help='Number of context lines to include around changes (default: 5)')
+    parser.add_argument('--context-lines', type=int, default=1,
+                       help='Number of context lines to include around changes (default: 1)')
     
     # =====================================================================
     # MOCK MODES - COMMENTED OUT (can be re-enabled if needed)
