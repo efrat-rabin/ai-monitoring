@@ -334,6 +334,9 @@ def git_apply_check(file_path: str, patch: str) -> Tuple[bool, str]:
         full_patch = f"--- a/{file_path}\n+++ b/{file_path}\n{patch}"
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".patch", delete=False) as tmp:
+        # Important: git apply treats missing trailing newline as a corrupt patch.
+        if not full_patch.endswith("\n"):
+            full_patch += "\n"
         tmp.write(full_patch)
         tmp_path = tmp.name
 
