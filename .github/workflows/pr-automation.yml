@@ -260,6 +260,20 @@ jobs:
             fi
             git push
           fi
+
+      - name: Refresh downstream patches for same file
+        if: steps.check_apply.outputs.should_apply == 'true'
+        continue-on-error: true
+        env:
+          CURSOR_API_KEY: ${{ secrets.cursor_api_key }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
+          python .ai-monitoring/actions/apply-suggested-logs/refresh_related_patches.py \
+            --pr-number ${{ steps.pr_info.outputs.pr_number }} \
+            --repository ${{ steps.pr_info.outputs.repository }} \
+            --applied-parent-comment-id "${{ steps.check_apply.outputs.parent_comment_id }}" \
+            --applied-comment-body-file parent-comment.txt
       
       - name: Post success comment
         if: steps.check_apply.outputs.should_apply == 'true'
