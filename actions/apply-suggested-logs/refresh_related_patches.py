@@ -510,6 +510,7 @@ def main() -> int:
         _log("ERROR: CURSOR_API_KEY not set (required to recalculate patches)")
         return 1
 
+    _debug(f"Initializing CursorClient for patch recalculation")
     cursor = CursorClient(api_key=cursor_api_key)
     ensure_cursor_ready(cursor)
 
