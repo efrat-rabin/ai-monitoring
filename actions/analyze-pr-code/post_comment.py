@@ -220,7 +220,14 @@ def upsert_summary_issue_comment(
     """Create or update the stable summary issue comment."""
     existing_id = find_existing_summary_comment_id(github_token, repository, pr_number)
     if existing_id is not None:
-        return update_issue_comment(github_token, repository, existing_id, comment_body)
+        # Prefer updating the existing summary comment to avoid clutter.
+        # If update fails (permissions, race, deleted comment, etc.), fall back
+        # to creating a new comment so the idempotency marker exists for gating.
+        if update_issue_comment(github_token, repository, existing_id, comment_body):
+            return True
+        print("⚠️  Update failed; posting a new summary comment as fallback")
+        return post_issue_comment(github_token, repository, pr_number, comment_body)
+
     return post_issue_comment(github_token, repository, pr_number, comment_body)
 
 
