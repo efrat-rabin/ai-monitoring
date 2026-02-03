@@ -108,7 +108,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
+          export PYTHONPATH="${GITHUB_WORKSPACE}/.ai-monitoring/libs:${GITHUB_WORKSPACE}/.ai-monitoring/shared:${PYTHONPATH}"
           python .ai-monitoring/actions/analyze-pr-code/post_comment.py \
             --pr-number ${{ steps.pr_info.outputs.pr_number }} \
             --repository ${{ steps.pr_info.outputs.repository }} \
@@ -176,7 +176,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
+          export PYTHONPATH="${GITHUB_WORKSPACE}/.ai-monitoring/libs:${GITHUB_WORKSPACE}/.ai-monitoring/shared:${PYTHONPATH}"
           
           # Get comment IDs from event context
           COMMENT_ID="${{ github.event.comment.id }}"
@@ -200,7 +200,7 @@ jobs:
             IN_REPLY_TO_ID="$COMMENT_ID"
           fi
           
-          python .ai-monitoring/actions/apply-suggested-logs/check_apply_trigger.py \
+          python .ai-monitoring/shared/comment_state.py check \
             --pr-number ${{ steps.pr_info.outputs.pr_number }} \
             --repository ${{ steps.pr_info.outputs.repository }} \
             --comment-id "$COMMENT_ID" \
@@ -222,7 +222,7 @@ jobs:
           CURSOR_API_KEY: ${{ secrets.cursor_api_key }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
+          export PYTHONPATH="${GITHUB_WORKSPACE}/.ai-monitoring/libs:${GITHUB_WORKSPACE}/.ai-monitoring/shared:${PYTHONPATH}"
           cd ${GITHUB_WORKSPACE}
           
           # Write parent comment to file
@@ -270,11 +270,23 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
+          export PYTHONPATH="${GITHUB_WORKSPACE}/.ai-monitoring/libs:${GITHUB_WORKSPACE}/.ai-monitoring/shared:${PYTHONPATH}"
           python .ai-monitoring/actions/apply-suggested-logs/post_apply_comment.py \
             --pr-number ${{ steps.pr_info.outputs.pr_number }} \
             --repository ${{ steps.pr_info.outputs.repository }} \
             --comment-id "${{ github.event.comment.id }}"
+
+      - name: Mark parent comment state
+        if: steps.check_apply.outputs.should_apply == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          export PYTHONPATH="${GITHUB_WORKSPACE}/.ai-monitoring/libs:${GITHUB_WORKSPACE}/.ai-monitoring/shared:${PYTHONPATH}"
+          PARENT_COMMENT_ID=$(jq -r '.parent_comment_id' apply-trigger.json)
+          python .ai-monitoring/shared/comment_state.py set \
+            --repository ${{ steps.pr_info.outputs.repository }} \
+            --parent-comment-id "$PARENT_COMMENT_ID" \
+            --state applied
 
   # Refresh all ISSUE_DATA patches: on every push to PR, or after apply-logs
   refresh-patches:
@@ -327,7 +339,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
+          export PYTHONPATH="${GITHUB_WORKSPACE}/.ai-monitoring/libs:${GITHUB_WORKSPACE}/.ai-monitoring/shared:${PYTHONPATH}"
           OUTPUT=$(python .ai-monitoring/actions/apply-suggested-logs/refresh_related_patches.py \
             --pr-number ${{ steps.pr_info.outputs.pr_number }} \
             --repository ${{ steps.pr_info.outputs.repository }} \
@@ -345,7 +357,7 @@ jobs:
           CURSOR_API_KEY: ${{ secrets.cursor_api_key }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
+          export PYTHONPATH="${GITHUB_WORKSPACE}/.ai-monitoring/libs:${GITHUB_WORKSPACE}/.ai-monitoring/shared:${PYTHONPATH}"
           python .ai-monitoring/actions/apply-suggested-logs/refresh_related_patches.py \
             --pr-number ${{ steps.pr_info.outputs.pr_number }} \
             --repository ${{ steps.pr_info.outputs.repository }} \
