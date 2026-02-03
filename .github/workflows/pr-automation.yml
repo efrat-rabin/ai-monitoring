@@ -143,7 +143,7 @@ jobs:
         run: |
           echo "Checked out commit: $(git rev-parse HEAD)"
           echo "Branch: $(git branch --show-current || echo 'detached HEAD')"
-          echo "PR head ref: ${{ github.event.pull_request.head.ref }}"
+          echo "PR branch (latest SHA): ${{ github.event.pull_request.head.ref }}"
       
       - name: Checkout workflow repository
         uses: actions/checkout@v4
@@ -241,13 +241,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          # We checked out the branch from the start, so we're already on the fresh tip
+          # Checked out by branch ref, so we're on the latest SHA; just push
           git add -u
           
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            # Use the commit message from apply step if available, otherwise use default
             COMMIT_MSG="${{ steps.apply_changes.outputs.commit_message }}"
             if [ -n "$COMMIT_MSG" ]; then
               git commit -m "$COMMIT_MSG"

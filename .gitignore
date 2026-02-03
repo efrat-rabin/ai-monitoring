@@ -37,3 +37,4 @@ Thumbs.db
 
 # Test outputs
 analysis-results.json
+scripts/delete_pr_comments.py
