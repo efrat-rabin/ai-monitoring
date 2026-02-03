@@ -2,6 +2,7 @@
 # This file is created by scripts/test_pr_workflow_apply_refresh.py and can be deleted after the test.
 
 def process_item(item):
+    logger.debug('processing_item', {'item_type': type(item).__name__})
     result = item.upper()
     return result
 
