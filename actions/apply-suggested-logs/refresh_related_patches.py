@@ -104,6 +104,8 @@ def _request_json(method: str, url: str, token: str, **kwargs) -> Any:
     resp = requests.request(method, url, headers=headers, **kwargs)
     if _verbose_enabled():
         _debug(f"{method} {url} -> {resp.status_code} ({len(resp.content)} bytes)")
+    if not resp.ok:
+        _log(f"HTTP error {resp.status_code} for {method} {url}: {resp.text[:500]}")
     resp.raise_for_status()
     if resp.status_code == 204:
         return None
