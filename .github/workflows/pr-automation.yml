@@ -242,12 +242,6 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
           PR_BRANCH="${{ github.event.pull_request.head.ref }}"
-          # We checked out by PR head SHA (detached HEAD). Fetch the PR branch from origin and check it out.
-          PR_BRANCH="${{ github.event.pull_request.head.ref }}"
-          echo "Fetching and checking out branch: $PR_BRANCH"
-          git fetch origin "$PR_BRANCH"
-          git checkout "$PR_BRANCH"
-          
           # Only add modified/deleted files (not temporary workflow files)
           git add -u
           
@@ -262,7 +256,7 @@ jobs:
               git commit -m "Apply AI-suggested logging improvements"
               echo "✓ Committed with default message"
             fi
-            git push origin "$PR_BRANCH"
+            git push origin HEAD:"$PR_BRANCH"
           fi
 
       - name: Post success comment
@@ -288,7 +282,28 @@ jobs:
             --parent-comment-id "$PARENT_COMMENT_ID" \
             --state applied
 
-  # Refresh all ISSUE_DATA patches: on every push to PR, or after apply-logs
+      # Pushes with GITHUB_TOKEN do not trigger new runs, so refresh-patches (synchronize) never runs after apply-logs. Run refresh here for applied files.
+      - name: Refresh patches for applied files
+        if: steps.check_apply.outputs.should_apply == 'true'
+        continue-on-error: true
+        env:
+          CURSOR_API_KEY: ${{ secrets.cursor_api_key }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ ! -s applied-files.txt ]; then
+            echo "No applied-files.txt or empty, skipping refresh"
+            exit 0
+          fi
+          echo "Refreshing patches for applied files:"
+          cat applied-files.txt
+          export PYTHONPATH="${GITHUB_WORKSPACE}/.ai-monitoring/libs:${GITHUB_WORKSPACE}/.ai-monitoring/shared:${PYTHONPATH}"
+          python .ai-monitoring/actions/apply-suggested-logs/refresh_related_patches.py \
+            --pr-number ${{ steps.pr_info.outputs.pr_number }} \
+            --repository ${{ steps.pr_info.outputs.repository }} \
+            --refresh-all \
+            --changed-files-file applied-files.txt
+
+  # Refresh all ISSUE_DATA patches on pull_request.synchronize (human/bot PAT pushes). Apply-logs runs refresh in-job above.
   refresh-patches:
     if: github.event_name == 'pull_request' && github.event.action == 'synchronize'
     concurrency:
