@@ -392,10 +392,138 @@ def build_cursor_prompt(issue: Dict[str, Any], file_path: str) -> str:
     )
 
 
+def _refresh_all_comments(
+    github_token: str,
+    repository: str,
+    pr_number: int,
+    max_comments: int,
+    verbose: bool,
+    changed_files: Optional[Iterable[str]] = None,
+) -> int:
+    """Refresh ISSUE_DATA patches for PR review comments.
+
+    When changed_files is provided and non-empty, only refresh comments for those files
+    (e.g. files changed in the trigger commit). Otherwise refresh all.
+    """
+    all_comments = list_pr_review_comments(github_token, repository, pr_number)
+    _log(f"Found {len(all_comments)} PR review comments")
+
+    changed_set: Optional[set] = None
+    if changed_files is not None:
+        changed_set = {p.strip() for p in changed_files if p and p.strip()}
+        if changed_set:
+            _log(f"Filtering to {len(changed_set)} file(s) changed in trigger commit")
+
+    # Collect bot ISSUE_DATA comments with (comment, meta, line_int), group by file
+    by_file: Dict[str, List[Tuple[ReviewComment, Dict[str, Any], int]]] = {}
+    for c in all_comments:
+        if not is_bot_issue_comment(c):
+            continue
+        meta = extract_issue_data(c.body)
+        if not meta:
+            continue
+        file_path = meta.get("file")
+        if not isinstance(file_path, str) or not file_path.strip():
+            continue
+        if changed_set and file_path not in changed_set:
+            continue
+        line_int = parse_int_line(meta.get("line"))
+        if line_int is None:
+            line_int = 1
+        by_file.setdefault(file_path, []).append((c, meta, line_int))
+
+    total_candidates = sum(len(v) for v in by_file.values())
+    if total_candidates == 0:
+        _log("No ISSUE_DATA comments to refresh for the given files.")
+        return 0
+    if total_candidates > max_comments:
+        _log(f"⚠️ Limiting to {max_comments} comments total (found {total_candidates})")
+    _log(f"Refreshing patches for {len(by_file)} file(s), {total_candidates} comment(s)")
+
+    cursor_api_key = os.getenv("CURSOR_API_KEY")
+    if not cursor_api_key:
+        _log("ERROR: CURSOR_API_KEY not set (required to recalculate patches)")
+        return 1
+
+    cursor = CursorClient(api_key=cursor_api_key)
+    ensure_cursor_ready(cursor)
+    max_chars = int(os.getenv("CURSOR_AGENT_MAX_PROMPT_CHARS", "250000"))
+
+    updated = 0
+    skipped = 0
+    failed = 0
+    remaining = max_comments
+
+    for applied_file, candidates in by_file.items():
+        if remaining <= 0:
+            break
+        if not os.path.exists(applied_file):
+            _log(f"⚠️ File not in workspace: {applied_file}; skipping {len(candidates)} comment(s)")
+            continue
+        file_text = read_text_file(applied_file)
+        current_hash = sha256_file(applied_file)
+        candidates = sorted(candidates, key=lambda t: t[2])[:remaining]
+        remaining -= len(candidates)
+
+        for (comment, meta, line_int) in candidates:
+            _log(f"\n---\nRefreshing comment #{comment.id} at {applied_file}:{line_int}")
+            try:
+                context = (
+                    f"REPOSITORY_FILE_PATH: {applied_file}\n"
+                    f"APPROX_LINE: {line_int}\n"
+                    f"CURRENT_FILE_SHA256: {current_hash}\n\n"
+                )
+                context += extract_context_slices(file_text, approx_line=line_int, max_chars=max_chars - 4000)
+                prompt = build_cursor_prompt(meta, applied_file)
+                result = cursor.send_message(prompt, context=context, verbose=verbose)
+                patch = extract_patch_from_cursor_result(result)
+                if not patch:
+                    _log("❌ No patch returned from Cursor; skipping")
+                    failed += 1
+                    continue
+                patch = normalize_and_fix_patch(patch)
+                validate_patch_or_raise(patch)
+                ok, reason = git_apply_check(applied_file, patch)
+                if not ok:
+                    _log("❌ Recalculated patch does not apply cleanly; skipping")
+                    _log(f"Reason: {reason.strip()[:800]}")
+                    failed += 1
+                    continue
+                new_meta = dict(meta)
+                new_meta["patch"] = patch
+                new_meta["file_hash"] = current_hash
+                new_body = replace_issue_data(comment.body, new_meta)
+                if new_body == comment.body:
+                    _log("No body change detected; skipping update")
+                    skipped += 1
+                    continue
+                update_review_comment_body(github_token, repository, comment.id, new_body)
+                _log("✓ Updated ISSUE_DATA patch in-place")
+                updated += 1
+            except Exception as e:
+                _log(f"❌ Failed to refresh comment #{comment.id}: {type(e).__name__}: {e}")
+                failed += 1
+
+    _log("\n=== Refresh All Summary ===")
+    _log(f"Updated: {updated}, Skipped: {skipped}, Failed: {failed}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Refresh downstream /apply-logs patches for same file")
     parser.add_argument("--pr-number", type=str, required=True)
     parser.add_argument("--repository", type=str, required=True)
+    parser.add_argument(
+        "--refresh-all",
+        action="store_true",
+        help="Refresh PR review comments with ISSUE_DATA (use on every push to PR)",
+    )
+    parser.add_argument(
+        "--changed-files-file",
+        type=str,
+        required=False,
+        help="Path to file listing paths of files changed in the trigger commit (one per line). When set, only refresh comments for those files.",
+    )
     parser.add_argument(
         "--applied-parent-comment-id",
         type=str,
@@ -425,6 +553,20 @@ def main() -> int:
 
     pr_number = int(args.pr_number)
     repository = args.repository
+
+    if args.refresh_all:
+        changed_files: Optional[List[str]] = None
+        if args.changed_files_file and os.path.isfile(args.changed_files_file):
+            with open(args.changed_files_file, "r", encoding="utf-8", errors="replace") as f:
+                changed_files = [line.strip() for line in f if line.strip()]
+        return _refresh_all_comments(
+            github_token,
+            repository,
+            pr_number,
+            args.max_comments,
+            verbose,
+            changed_files=changed_files,
+        )
 
     applied_body: Optional[str] = None
     applied_comment_id: Optional[int] = None

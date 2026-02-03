@@ -2,7 +2,7 @@ name: PR Automation
 
 on:
   pull_request:
-    types: [opened, reopened]
+    types: [opened, reopened, synchronize]
   pull_request_review_comment:
     types: [created]
   workflow_call:
@@ -114,7 +114,7 @@ jobs:
             --commit-sha ${{ github.event.pull_request.head.sha }} \
             --results-file analysis-results.json
 
-  # Apply fixes when developer comments /apply-logs
+  # Apply fixes when developer replies to a comment with /apply-logs
   apply-logs:
     concurrency:
       group: apply-logs-pr-${{ github.event.pull_request.number }}
@@ -264,20 +264,6 @@ jobs:
             git push
           fi
 
-      - name: Refresh downstream patches for same file
-        if: steps.check_apply.outputs.should_apply == 'true'
-        continue-on-error: true
-        env:
-          CURSOR_API_KEY: ${{ secrets.cursor_api_key }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
-          python .ai-monitoring/actions/apply-suggested-logs/refresh_related_patches.py \
-            --pr-number ${{ steps.pr_info.outputs.pr_number }} \
-            --repository ${{ steps.pr_info.outputs.repository }} \
-            --applied-parent-comment-id "${{ steps.check_apply.outputs.parent_comment_id }}" \
-            --applied-comment-body-file parent-comment.txt
-      
       - name: Post success comment
         if: steps.check_apply.outputs.should_apply == 'true'
         env:
@@ -288,6 +274,65 @@ jobs:
             --pr-number ${{ steps.pr_info.outputs.pr_number }} \
             --repository ${{ steps.pr_info.outputs.repository }} \
             --comment-id "${{ github.event.comment.id }}"
+
+  # Refresh all ISSUE_DATA patches: on every push to PR, or after apply-logs
+  refresh-patches:
+    if: github.event_name == 'pull_request' && github.event.action == 'synchronize'
+    concurrency:
+      group: refresh-patches-pr-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get PR info
+        id: pr_info
+        run: |
+          echo "pr_number=${{ inputs.pr_number || github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          echo "repository=${{ inputs.repository || github.repository }}" >> $GITHUB_OUTPUT
+      
+      - name: Checkout calling repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.pr_info.outputs.repository }}
+          ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ secrets.git_token || secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+      
+      - name: Checkout workflow repository
+        uses: actions/checkout@v4
+        with:
+          repository: efrat-rabin/ai-monitoring
+          path: .ai-monitoring
+          ref: ${{ github.repository == 'efrat-rabin/ai-monitoring' && (github.event.pull_request.head.sha || github.sha) || 'main' }}
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          cd .ai-monitoring
+          pip install -r requirements.txt
+      
+      - name: Get files changed in trigger commit
+        id: changed_files
+        run: |
+          git diff --name-only HEAD~1 HEAD 2>/dev/null || true > changed-files.txt
+          echo "Changed files:"
+          cat changed-files.txt || true
+      
+      - name: Refresh patches for changed files
+        continue-on-error: true
+        env:
+          CURSOR_API_KEY: ${{ secrets.cursor_api_key }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
+          python .ai-monitoring/actions/apply-suggested-logs/refresh_related_patches.py \
+            --pr-number ${{ steps.pr_info.outputs.pr_number }} \
+            --repository ${{ steps.pr_info.outputs.repository }} \
+            --refresh-all \
+            --changed-files-file changed-files.txt
 
   # Generate monitor when developer comments /generate-monitor
   generate-monitor:
