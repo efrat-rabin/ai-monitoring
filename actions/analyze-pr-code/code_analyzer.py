@@ -446,7 +446,28 @@ class CursorAnalyzer:
                 print(f"[DEBUG] Extraction result type: {type(result)}")
                 print(f"[DEBUG] Extraction result preview: {str(result)[:200]}")
             
-            # Try to parse the extracted result
+            # cursor_client.send_message may return already-parsed data (list or envelope dict)
+            if isinstance(result, list):
+                if result and verbose:
+                    print(f"[DEBUG] Extraction returned list with {len(result)} items")
+                print(f"✓ Successfully extracted JSON array with {len(result)} items")
+                return result
+            if isinstance(result, dict) and "result" in result:
+                payload = result["result"]
+                if isinstance(payload, list):
+                    print(f"✓ Successfully extracted JSON array with {len(payload)} items")
+                    return payload
+                if isinstance(payload, str):
+                    try:
+                        parsed = json.loads(payload.strip())
+                        if isinstance(parsed, list):
+                            print(f"✓ Successfully extracted JSON array with {len(parsed)} items")
+                            return parsed
+                    except json.JSONDecodeError:
+                        if verbose:
+                            print(f"[DEBUG] Envelope result string is not valid JSON")
+            
+            # Try to parse the extracted result when it's a string
             if isinstance(result, str):
                 # Remove any markdown code blocks
                 result = result.strip()

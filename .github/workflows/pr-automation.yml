@@ -108,7 +108,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
+          export PYTHONPATH="${GITHUB_WORKSPACE}/.ai-monitoring/libs:${GITHUB_WORKSPACE}/.ai-monitoring/shared:${PYTHONPATH}"
           python .ai-monitoring/actions/analyze-pr-code/post_comment.py \
             --pr-number ${{ steps.pr_info.outputs.pr_number }} \
             --repository ${{ steps.pr_info.outputs.repository }} \
@@ -176,7 +176,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
+          export PYTHONPATH="${GITHUB_WORKSPACE}/.ai-monitoring/libs:${GITHUB_WORKSPACE}/.ai-monitoring/shared:${PYTHONPATH}"
           
           # Get comment IDs from event context
           COMMENT_ID="${{ github.event.comment.id }}"
@@ -200,7 +200,7 @@ jobs:
             IN_REPLY_TO_ID="$COMMENT_ID"
           fi
           
-          python .ai-monitoring/actions/apply-suggested-logs/check_apply_trigger.py \
+          python .ai-monitoring/shared/comment_state.py check \
             --pr-number ${{ steps.pr_info.outputs.pr_number }} \
             --repository ${{ steps.pr_info.outputs.repository }} \
             --comment-id "$COMMENT_ID" \
@@ -222,7 +222,7 @@ jobs:
           CURSOR_API_KEY: ${{ secrets.cursor_api_key }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
+          export PYTHONPATH="${GITHUB_WORKSPACE}/.ai-monitoring/libs:${GITHUB_WORKSPACE}/.ai-monitoring/shared:${PYTHONPATH}"
           cd ${GITHUB_WORKSPACE}
           
           # Write parent comment to file
@@ -242,6 +242,12 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
           PR_BRANCH="${{ github.event.pull_request.head.ref }}"
+          # We checked out by PR head SHA (detached HEAD). Fetch the PR branch from origin and check it out.
+          PR_BRANCH="${{ github.event.pull_request.head.ref }}"
+          echo "Fetching and checking out branch: $PR_BRANCH"
+          git fetch origin "$PR_BRANCH"
+          git checkout "$PR_BRANCH"
+          
           # Only add modified/deleted files (not temporary workflow files)
           git add -u
           
@@ -256,7 +262,7 @@ jobs:
               git commit -m "Apply AI-suggested logging improvements"
               echo "✓ Committed with default message"
             fi
-            git push origin HEAD:"$PR_BRANCH"
+            git push origin "$PR_BRANCH"
           fi
 
       - name: Post success comment
@@ -264,7 +270,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
+          export PYTHONPATH="${GITHUB_WORKSPACE}/.ai-monitoring/libs:${GITHUB_WORKSPACE}/.ai-monitoring/shared:${PYTHONPATH}"
           python .ai-monitoring/actions/apply-suggested-logs/post_apply_comment.py \
             --pr-number ${{ steps.pr_info.outputs.pr_number }} \
             --repository ${{ steps.pr_info.outputs.repository }} \
@@ -282,31 +288,7 @@ jobs:
             --parent-comment-id "$PARENT_COMMENT_ID" \
             --state applied
 
-      # Pushes made with GITHUB_TOKEN do not trigger new workflow runs, so refresh-patches
-      # (which runs on pull_request.synchronize) never runs after apply-logs. Run refresh
-      # here for the files we just applied so downstream ISSUE_DATA comments stay in sync.
-      - name: Refresh patches for applied files
-        if: steps.check_apply.outputs.should_apply == 'true'
-        continue-on-error: true
-        env:
-          CURSOR_API_KEY: ${{ secrets.cursor_api_key }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if [ ! -s applied-files.txt ]; then
-            echo "No applied-files.txt or empty, skipping refresh"
-            exit 0
-          fi
-          echo "Refreshing patches for applied files:"
-          cat applied-files.txt
-          export PYTHONPATH="${GITHUB_WORKSPACE}/.ai-monitoring/libs:${GITHUB_WORKSPACE}/.ai-monitoring/shared:${PYTHONPATH}"
-          python .ai-monitoring/actions/apply-suggested-logs/refresh_related_patches.py \
-            --pr-number ${{ steps.pr_info.outputs.pr_number }} \
-            --repository ${{ steps.pr_info.outputs.repository }} \
-            --refresh-all \
-            --changed-files-file applied-files.txt
-
-  # Refresh all ISSUE_DATA patches: on every push to PR (synchronize). Note: pushes from
-  # GITHUB_TOKEN do not trigger new runs; apply-logs runs refresh in-job for applied files.
+  # Refresh all ISSUE_DATA patches: on every push to PR, or after apply-logs
   refresh-patches:
     if: github.event_name == 'pull_request' && github.event.action == 'synchronize'
     concurrency:
@@ -357,7 +339,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
+          export PYTHONPATH="${GITHUB_WORKSPACE}/.ai-monitoring/libs:${GITHUB_WORKSPACE}/.ai-monitoring/shared:${PYTHONPATH}"
           OUTPUT=$(python .ai-monitoring/actions/apply-suggested-logs/refresh_related_patches.py \
             --pr-number ${{ steps.pr_info.outputs.pr_number }} \
             --repository ${{ steps.pr_info.outputs.repository }} \
@@ -375,7 +357,7 @@ jobs:
           CURSOR_API_KEY: ${{ secrets.cursor_api_key }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
+          export PYTHONPATH="${GITHUB_WORKSPACE}/.ai-monitoring/libs:${GITHUB_WORKSPACE}/.ai-monitoring/shared:${PYTHONPATH}"
           python .ai-monitoring/actions/apply-suggested-logs/refresh_related_patches.py \
             --pr-number ${{ steps.pr_info.outputs.pr_number }} \
             --repository ${{ steps.pr_info.outputs.repository }} \

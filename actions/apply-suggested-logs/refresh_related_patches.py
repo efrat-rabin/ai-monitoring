@@ -31,6 +31,9 @@ import requests
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "libs"))
 from cursor_client import CursorClient  # type: ignore
 
+# comment_state is in shared/ (expect PYTHONPATH to include .ai-monitoring/shared)
+from comment_state import APPLY_LOGS_LINE, is_analyzed_state  # type: ignore
+
 # Import patch validation utilities (best-effort)
 sys.path.insert(0, str(Path(__file__).parent.parent / "analyze-pr-code"))
 try:
@@ -62,7 +65,7 @@ def is_bot_issue_comment(comment: ReviewComment) -> bool:
     """
     if "ISSUE_DATA" not in comment.body:
         return False
-    if "Reply with `/apply-logs`" in comment.body:
+    if APPLY_LOGS_LINE in comment.body:
         return True
     if comment.body.lstrip().startswith("**🤖"):
         return True
@@ -414,6 +417,8 @@ def _get_refresh_candidates(
     for c in all_comments:
         if not is_bot_issue_comment(c):
             continue
+        if not is_analyzed_state(c.body):
+            continue
         meta = extract_issue_data(c.body)
         if not meta:
             continue
@@ -641,6 +646,8 @@ def main() -> int:
     for c in all_comments:
         # Safety: only touch bot-style comments (never edit human review comments).
         if not is_bot_issue_comment(c):
+            continue
+        if not is_analyzed_state(c.body):
             continue
         meta = extract_issue_data(c.body)
         if not meta:
