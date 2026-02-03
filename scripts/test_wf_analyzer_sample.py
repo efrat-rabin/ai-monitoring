@@ -9,6 +9,7 @@ def process_item(item):
 
 def handle_request(req):
     try:
+        logger.info('handling_request', {'request_keys': list(req.keys()) if isinstance(req, dict) else type(req).__name__})
         data = req.get("data")
         return data
     except Exception:
