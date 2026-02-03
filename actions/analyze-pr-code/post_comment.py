@@ -12,6 +12,8 @@ import hashlib
 import requests
 from typing import Dict, List, Any
 
+from comment_state import APPLY_LOGS_LINE, STATE_ANALYZED, status_marker
+
 
 def compute_file_hash(file_path: str) -> str:
     """Compute SHA256 hash of a file for change detection."""
@@ -70,8 +72,8 @@ def format_review_comment(issue: Dict[str, Any], file_path: str) -> str:
         comment += f"**Impact:** {issue['impact']}\n\n"
     
     comment += "---\n"
-    comment += "Reply with `/apply-logs` to apply this change automatically.\n\n"
-    
+    comment += APPLY_LOGS_LINE + "\n\n"
+
     # Serialize metadata as JSON
     # Use ensure_ascii=False to prevent unnecessary escaping of quotes
     # Use separators to avoid extra whitespace
@@ -84,7 +86,7 @@ def format_review_comment(issue: Dict[str, Any], file_path: str) -> str:
         print(f"  Recommendation preview: {metadata.get('recommendation', '')[:100]}")
     
     comment += f"<!-- ISSUE_DATA: {metadata_json} -->"
-    
+    comment += "\n\n" + status_marker(STATE_ANALYZED)
     return comment
 
 
