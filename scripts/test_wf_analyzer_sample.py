@@ -16,6 +16,7 @@ def handle_request(req):
 
 
 def batch_process(items):
+    logger.info('batch_process_started', {'item_count': len(items)})
     for i, x in enumerate(items):
         y = x.strip()
         if not y:
