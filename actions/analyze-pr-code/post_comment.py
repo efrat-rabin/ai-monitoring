@@ -88,31 +88,6 @@ def format_review_comment(issue: Dict[str, Any], file_path: str) -> str:
     return comment
 
 
-def post_issue_comment(
-    github_token: str,
-    repository: str,
-    pr_number: int,
-    comment_body: str
-) -> bool:
-    """Post a general comment on a GitHub PR."""
-    owner, repo = repository.split("/")
-    url = f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_number}/comments"
-    
-    headers = {
-        "Authorization": f"Bearer {github_token}",   
-        "Accept": "application/vnd.github+json",
-    }
-    
-    try:
-        response = requests.post(url, headers=headers, json={"body": comment_body})
-        response.raise_for_status()
-        print(f"✅ Posted comment")
-        return True
-    except Exception as e:
-        print(f"❌ Failed: {e}")
-        return False
-
-
 def get_pr_changed_lines(
     github_token: str,
     repository: str,
@@ -272,8 +247,8 @@ def main():
     
     if skipped_not_in_diff > 0:
         print(f"\n⚠️ Skipped {skipped_not_in_diff} issue(s) not in PR diff")
-    
-    print(f"✅ Posted {total_comments} review comment(s) + 1 summary")
+
+    print(f"✅ Posted {total_comments} review comment(s)")
     return 0
 
 

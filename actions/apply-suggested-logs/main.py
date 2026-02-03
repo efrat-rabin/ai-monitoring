@@ -192,6 +192,9 @@ class PatchApplier:
         
         # Write patch to temporary file
         with tempfile.NamedTemporaryFile(mode='w', suffix='.patch', delete=False) as tmp:
+            # Important: git apply treats missing trailing newline as a corrupt patch.
+            if not full_patch.endswith('\n'):
+                full_patch += '\n'
             tmp.write(full_patch)
             tmp_patch_file = tmp.name
         
@@ -377,8 +380,10 @@ def main():
     print(f"\n🔍 DEBUG: Raw patch content from JSON:")
     print(f"  Patch type: {type(patch_content)}")
     print(f"  Patch length: {len(patch_content)} characters")
-    has_escaped_newlines = '\\n' in repr(patch_content)
-    print(f"  Has \\n escape sequences: {has_escaped_newlines}")
+    has_actual_newlines = '\n' in patch_content
+    has_literal_backslash_n = '\\n' in patch_content
+    print(f"  Contains actual newlines: {has_actual_newlines}")
+    print(f"  Contains literal \\\\n sequences: {has_literal_backslash_n}")
     print(f"  Number of actual newlines: {patch_content.count(chr(10))}")
     print(f"\n  Raw patch (repr, first 300 chars):")
     print(f"  {repr(patch_content[:300])}")
