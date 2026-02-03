@@ -116,6 +116,9 @@ jobs:
 
   # Apply fixes when developer comments /apply-logs
   apply-logs:
+    concurrency:
+      group: apply-logs-pr-${{ github.event.pull_request.number }}
+      cancel-in-progress: false   # queue; runs execute in FIFO order
     if: |
       github.event_name == 'pull_request_review_comment' &&
       contains(github.event.comment.body, '/apply-logs')
