@@ -392,18 +392,14 @@ def build_cursor_prompt(issue: Dict[str, Any], file_path: str) -> str:
     )
 
 
-def _refresh_all_comments(
+def _get_refresh_candidates(
     github_token: str,
     repository: str,
     pr_number: int,
-    max_comments: int,
-    verbose: bool,
     changed_files: Optional[Iterable[str]] = None,
-) -> int:
-    """Refresh ISSUE_DATA patches for PR review comments.
-
-    When changed_files is provided and non-empty, only refresh comments for those files
-    (e.g. files changed in the trigger commit). Otherwise refresh all.
+) -> Tuple[Dict[str, List[Tuple[ReviewComment, Dict[str, Any], int]]], int]:
+    """List PR review comments that have ISSUE_DATA and match changed_files (if set).
+    Returns (by_file, total_candidates). Does not use Cursor.
     """
     all_comments = list_pr_review_comments(github_token, repository, pr_number)
     _log(f"Found {len(all_comments)} PR review comments")
@@ -414,7 +410,6 @@ def _refresh_all_comments(
         if changed_set:
             _log(f"Filtering to {len(changed_set)} file(s) changed in trigger commit")
 
-    # Collect bot ISSUE_DATA comments with (comment, meta, line_int), group by file
     by_file: Dict[str, List[Tuple[ReviewComment, Dict[str, Any], int]]] = {}
     for c in all_comments:
         if not is_bot_issue_comment(c):
@@ -433,6 +428,25 @@ def _refresh_all_comments(
         by_file.setdefault(file_path, []).append((c, meta, line_int))
 
     total_candidates = sum(len(v) for v in by_file.values())
+    return by_file, total_candidates
+
+
+def _refresh_all_comments(
+    github_token: str,
+    repository: str,
+    pr_number: int,
+    max_comments: int,
+    verbose: bool,
+    changed_files: Optional[Iterable[str]] = None,
+) -> int:
+    """Refresh ISSUE_DATA patches for PR review comments.
+
+    When changed_files is provided and non-empty, only refresh comments for those files
+    (e.g. files changed in the trigger commit). Otherwise refresh all.
+    """
+    by_file, total_candidates = _get_refresh_candidates(
+        github_token, repository, pr_number, changed_files
+    )
     if total_candidates == 0:
         _log("No ISSUE_DATA comments to refresh for the given files.")
         return 0
@@ -542,6 +556,11 @@ def main() -> int:
         default=int(os.getenv("REFRESH_MAX_COMMENTS", "50")),
         help="Maximum number of downstream comments to refresh for a file (default 50)",
     )
+    parser.add_argument(
+        "--count-only",
+        action="store_true",
+        help="With --refresh-all: only count ISSUE_DATA comments to refresh (no Cursor). Prints COMMENTS_TO_REFRESH=N.",
+    )
     args = parser.parse_args()
 
     verbose = _verbose_enabled()
@@ -559,6 +578,12 @@ def main() -> int:
         if args.changed_files_file and os.path.isfile(args.changed_files_file):
             with open(args.changed_files_file, "r", encoding="utf-8", errors="replace") as f:
                 changed_files = [line.strip() for line in f if line.strip()]
+        if args.count_only:
+            _, total_candidates = _get_refresh_candidates(
+                github_token, repository, pr_number, changed_files
+            )
+            _log(f"COMMENTS_TO_REFRESH={total_candidates}")
+            return 0
         return _refresh_all_comments(
             github_token,
             repository,

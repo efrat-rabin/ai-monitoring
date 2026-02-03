@@ -321,7 +321,24 @@ jobs:
           echo "Changed files:"
           cat changed-files.txt || true
       
+      - name: Count comments to refresh
+        id: count_comments_to_refresh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
+          OUTPUT=$(python .ai-monitoring/actions/apply-suggested-logs/refresh_related_patches.py \
+            --pr-number ${{ steps.pr_info.outputs.pr_number }} \
+            --repository ${{ steps.pr_info.outputs.repository }} \
+            --refresh-all \
+            --count-only \
+            --changed-files-file changed-files.txt 2>&1)
+          echo "$OUTPUT"
+          COUNT=$(echo "$OUTPUT" | grep '^COMMENTS_TO_REFRESH=' | sed 's/COMMENTS_TO_REFRESH=//' || echo '0')
+          echo "count=$COUNT" >> $GITHUB_OUTPUT
+      
       - name: Refresh patches for changed files
+        if: steps.count_comments_to_refresh.outputs.count != '0'
         continue-on-error: true
         env:
           CURSOR_API_KEY: ${{ secrets.cursor_api_key }}
