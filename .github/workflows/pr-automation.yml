@@ -241,9 +241,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          # Switch to the PR branch (we're currently in detached HEAD from SHA checkout)
+          # We checked out by PR head SHA (detached HEAD). Fetch the PR branch from origin and check it out.
           PR_BRANCH="${{ github.event.pull_request.head.ref }}"
-          echo "Switching to branch: $PR_BRANCH"
+          echo "Fetching and checking out branch: $PR_BRANCH"
+          git fetch origin "$PR_BRANCH"
           git checkout "$PR_BRANCH"
           
           # Only add modified/deleted files (not temporary workflow files)
@@ -262,7 +263,7 @@ jobs:
               git commit -m "Apply AI-suggested logging improvements"
               echo "✓ Committed with default message"
             fi
-            git push
+            git push origin "$PR_BRANCH"
           fi
 
       - name: Post success comment
