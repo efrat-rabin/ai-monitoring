@@ -39,10 +39,11 @@ permissions:
   pull-requests: write
 
 jobs:
-  # Analyze when PR is opened or reopened (not on each new commit)
+  # Analyze when PR is opened or reopened (not on each new commit / synchronize)
   analyze:
     if: |
       github.event_name == 'pull_request' &&
+      (github.event.action == 'opened' || github.event.action == 'reopened') &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
