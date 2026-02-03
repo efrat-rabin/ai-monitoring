@@ -119,7 +119,7 @@ jobs:
   apply-logs:
     concurrency:
       group: apply-logs-pr-${{ github.event.pull_request.number }}
-      cancel-in-progress: false   # queue; runs execute in FIFO order
+      cancel-in-progress: false
     if: |
       github.event_name == 'pull_request_review_comment' &&
       contains(github.event.comment.body, '/apply-logs')
@@ -241,19 +241,13 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          # Switch to the PR branch (we're currently in detached HEAD from SHA checkout)
           PR_BRANCH="${{ github.event.pull_request.head.ref }}"
-          echo "Switching to branch: $PR_BRANCH"
-          git checkout "$PR_BRANCH"
-          
           # Only add modified/deleted files (not temporary workflow files)
-          # This excludes: .ai-monitoring/, apply-trigger.json, parent-comment.txt
           git add -u
           
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            # Use the commit message from apply step if available, otherwise use default
             COMMIT_MSG="${{ steps.apply_changes.outputs.commit_message }}"
             if [ -n "$COMMIT_MSG" ]; then
               git commit -m "$COMMIT_MSG"
@@ -262,7 +256,7 @@ jobs:
               git commit -m "Apply AI-suggested logging improvements"
               echo "✓ Committed with default message"
             fi
-            git push
+            git push origin HEAD:"$PR_BRANCH"
           fi
 
       - name: Post success comment
@@ -276,7 +270,43 @@ jobs:
             --repository ${{ steps.pr_info.outputs.repository }} \
             --comment-id "${{ github.event.comment.id }}"
 
-  # Refresh all ISSUE_DATA patches: on every push to PR, or after apply-logs
+      - name: Mark parent comment state
+        if: steps.check_apply.outputs.should_apply == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          export PYTHONPATH="${GITHUB_WORKSPACE}/.ai-monitoring/libs:${GITHUB_WORKSPACE}/.ai-monitoring/shared:${PYTHONPATH}"
+          PARENT_COMMENT_ID=$(jq -r '.parent_comment_id' apply-trigger.json)
+          python .ai-monitoring/shared/comment_state.py set \
+            --repository ${{ steps.pr_info.outputs.repository }} \
+            --parent-comment-id "$PARENT_COMMENT_ID" \
+            --state applied
+
+      # Pushes made with GITHUB_TOKEN do not trigger new workflow runs, so refresh-patches
+      # (which runs on pull_request.synchronize) never runs after apply-logs. Run refresh
+      # here for the files we just applied so downstream ISSUE_DATA comments stay in sync.
+      - name: Refresh patches for applied files
+        if: steps.check_apply.outputs.should_apply == 'true'
+        continue-on-error: true
+        env:
+          CURSOR_API_KEY: ${{ secrets.cursor_api_key }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ ! -s applied-files.txt ]; then
+            echo "No applied-files.txt or empty, skipping refresh"
+            exit 0
+          fi
+          echo "Refreshing patches for applied files:"
+          cat applied-files.txt
+          export PYTHONPATH="${GITHUB_WORKSPACE}/.ai-monitoring/libs:${GITHUB_WORKSPACE}/.ai-monitoring/shared:${PYTHONPATH}"
+          python .ai-monitoring/actions/apply-suggested-logs/refresh_related_patches.py \
+            --pr-number ${{ steps.pr_info.outputs.pr_number }} \
+            --repository ${{ steps.pr_info.outputs.repository }} \
+            --refresh-all \
+            --changed-files-file applied-files.txt
+
+  # Refresh all ISSUE_DATA patches: on every push to PR (synchronize). Note: pushes from
+  # GITHUB_TOKEN do not trigger new runs; apply-logs runs refresh in-job for applied files.
   refresh-patches:
     if: github.event_name == 'pull_request' && github.event.action == 'synchronize'
     concurrency:
