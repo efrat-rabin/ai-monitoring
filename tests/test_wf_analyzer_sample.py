@@ -10,7 +10,8 @@ def handle_request(req):
     try:
         data = req.get("data")
         return data
-    except Exception:
+    except Exception as e:
+        logger.error('request_handling_failed', {'error': str(e), 'error_type': type(e).__name__, 'request': req})
         raise
 
 
