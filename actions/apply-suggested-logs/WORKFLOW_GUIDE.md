@@ -184,7 +184,7 @@ actions/apply-suggested-logs/
 ├── main.py                    # Main script that applies changes
 ├── check_apply_trigger.py     # Checks for /apply-logs in comments
 ├── post_apply_comment.py      # Posts success comment
-├── test_apply.sh              # Test script
+├── tests/test_apply.sh        # Test script (run from repo root)
 ├── README.md                  # Documentation
 └── WORKFLOW_GUIDE.md          # This file
 
