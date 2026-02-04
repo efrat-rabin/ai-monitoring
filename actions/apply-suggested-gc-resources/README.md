@@ -1,197 +1,37 @@
-# Groundcover Alert Creation from Log Lines
+# Groundcover Resources (Monitors & Dashboards)
 
-This script analyzes individual log lines using AI and automatically creates appropriate alerts in groundcover.
+Scripts used by `.github/workflows/pr-automation.yml` to generate and create Groundcover monitors and dashboards from PR review comments.
 
-## Overview
+## How the workflow uses this directory
 
-The script:
-1. Receives a single log line as stringified JSON via command-line argument
-2. Uses AI (Claude) to analyze if the log line warrants an alert
-3. If appropriate, creates an alert in groundcover via their API
+| Comment command       | Script invoked                         |
+|-----------------------|----------------------------------------|
+| `/generate-monitor`   | `generate_monitor_yaml.py`             |
+| `/create-monitor`     | `post_create_monitor_response.py`      |
+| `/generate-dashboard` | `post_dashboard_preview.py`            |
+| `/create-dashboard`   | `post_create_dashboard_response.py`    |
 
-## Prerequisites
+Users reply with these commands on PR review comment threads. The workflow runs the corresponding script (see [pr-automation.yml](../../.github/workflows/pr-automation.yml)).
 
-### Environment Variables
+## Module structure
 
-The following environment variables must be set:
+- `generate_monitor_yaml.py` – Uses Cursor AI to generate monitor YAML from issue context and posts a preview comment.
+- `post_create_monitor_response.py` – Reads YAML from the parent comment and creates the monitor in Groundcover (or posts manual instructions if no API key).
+- `post_dashboard_preview.py` – Posts a dashboard preview comment (image + metadata).
+- `post_create_dashboard_response.py` – Posts instructions or confirmation for dashboard creation.
+- `post_preview_comment.py` – Helpers used by `generate_monitor_yaml.py`: `extract_issue_data_from_comment`, `get_root_comment`.
+- `prompts.py` – `MONITOR_YAML_GENERATION_PROMPT` for Cursor.
+- `groundcover_client.py` – Groundcover API client (used when `GROUNDCOVER_API_KEY` is set).
 
-- `ANTHROPIC_API_KEY` - API key for Claude AI analysis
-- `GROUNDCOVER_API_KEY` - API key for groundcover (get via `groundcover auth get-datasources-api-key`)
-- `GROUNDCOVER_API_URL` (optional) - Base URL for groundcover API (defaults to `https://api.groundcover.com`)
+## Environment variables
 
-### Dependencies
+- `CURSOR_API_KEY` – Used by `generate_monitor_yaml.py`.
+- `GITHUB_TOKEN` – Used by all scripts for GitHub API.
+- `GROUNDCOVER_API_KEY` – (Optional) Enables creating monitors via API in `post_create_monitor_response.py`.
 
-Install required Python packages:
+## Test scripts (dev-only)
 
-```bash
-pip install -r ../../requirements.txt
-```
+- [tests/test_examples.sh](../../tests/test_examples.sh) – Previously ran the removed standalone log-line flow; **no longer runnable** (see plan: unused code removed).
+- [tests/test_gc_only.sh](../../tests/test_gc_only.sh) – Same; **no longer runnable**.
 
-## Usage
-
-### Basic Usage
-
-```bash
-python main.py --log-line '{"level":"error","message":"Database connection failed","service":"api","timestamp":"2025-10-29T10:30:00Z"}'
-```
-
-### Dry Run Mode
-
-Analyze the log line without creating an alert:
-
-```bash
-python main.py --log-line '{"level":"error","message":"Database connection failed"}' --dry-run
-```
-
-### Example Log Line Formats
-
-**Error Log:**
-```json
-{
-  "level": "error",
-  "message": "Failed to connect to database",
-  "service": "user-service",
-  "timestamp": "2025-10-29T10:30:00Z",
-  "error": "Connection timeout after 30s"
-}
-```
-
-**Warning Log:**
-```json
-{
-  "level": "warning",
-  "message": "High memory usage detected",
-  "service": "payment-service",
-  "memory_usage": "85%",
-  "timestamp": "2025-10-29T10:30:00Z"
-}
-```
-
-**Info Log (likely won't create alert):**
-```json
-{
-  "level": "info",
-  "message": "User logged in successfully",
-  "user_id": "12345",
-  "timestamp": "2025-10-29T10:30:00Z"
-}
-```
-
-## How It Works
-
-### 1. Log Line Parsing
-The script parses the stringified JSON log line and validates its structure.
-
-### 2. AI Analysis
-Claude AI analyzes the log line to determine:
-- Should an alert be created?
-- What should the alert name be?
-- What severity level is appropriate? (critical/high/medium/low)
-- What condition should trigger the alert?
-- What threshold should be used?
-
-### 3. Alert Creation
-If the AI determines an alert is appropriate, the script:
-- Constructs a monitor configuration
-- Sends it to groundcover API
-- Returns the created alert ID
-
-## Output
-
-### Successful Alert Creation
-```
-============================================================
-Groundcover Alert Creation from Log Lines
-============================================================
-
-[1/5] Validating environment...
-✓ Environment variables present
-
-[2/5] Parsing log line...
-✓ Log line parsed successfully
-   Log preview: {
-  "level": "error",
-  "message": "Database connection failed"
-}...
-
-[3/5] Analyzing log line with AI...
-✓ Analysis complete
-   Should create alert: True
-   Alert name: Database Connection Failure Alert
-   Severity: high
-   Condition: error rate > threshold
-   Threshold: 1 error per minute
-
-[4/5] Creating alert in groundcover...
-Successfully created alert: Database Connection Failure Alert
-Alert ID: alert-12345
-✓ Alert created successfully
-
-[5/5] Summary
-============================================================
-Alert Name: Database Connection Failure Alert
-Alert ID: alert-12345
-Severity: high
-Status: Created
-============================================================
-```
-
-### No Alert Needed
-```
-[RESULT] AI determined this log line does not warrant an alert.
-   Reason: Log appears to be informational or routine.
-```
-
-## Module Structure
-
-- `main.py` - Main script orchestrating the workflow
-- `ai_analyzer.py` - AI analysis module using Claude
-- `groundcover_client.py` - Groundcover API client
-
-## Error Handling
-
-The script handles various error scenarios:
-- Invalid JSON in log line
-- Missing environment variables
-- AI API failures
-- Groundcover API failures
-
-All errors are logged with descriptive messages.
-
-## Integration with GitHub Actions
-
-This script can be integrated into GitHub Actions workflows. See the parent directory's workflow files for examples.
-
-## Troubleshooting
-
-### "Missing required environment variables"
-Ensure both `ANTHROPIC_API_KEY` and `GROUNDCOVER_API_KEY` are set:
-```bash
-export ANTHROPIC_API_KEY="your-key-here"
-export GROUNDCOVER_API_KEY="your-key-here"
-```
-
-### "Invalid JSON in log line"
-Ensure your log line is valid JSON and properly escaped:
-```bash
-# Good
-python main.py --log-line '{"level":"error","message":"test"}'
-
-# Bad (not escaped)
-python main.py --log-line {"level":"error"}
-```
-
-### "HTTP error creating alert"
-- Verify your groundcover API key is valid
-- Check if the groundcover API URL is correct
-- Ensure you have permissions to create alerts
-
-## Future Enhancements
-
-Potential improvements:
-- Support for batch processing multiple log lines
-- Custom alert templates
-- Integration with different LLM providers
-- Support for dashboard creation
-- Alert deduplication logic
-
+For workflow testing, use the PR automation workflow or see [tests/TEST_PLAN_PR_WORKFLOW.md](../../tests/TEST_PLAN_PR_WORKFLOW.md).

@@ -1,7 +1,11 @@
 #!/bin/bash
-# Test script for apply-suggested-logs action
+# Test script for apply-suggested-logs action.
+# DEPRECATED: main.py uses --comment-body-file (ISSUE_DATA in comment body), not --analysis-results.
+# Run from repo root: bash tests/test_apply.sh
 
 set -e
+
+cd "$(git rev-parse --show-toplevel)"
 
 echo "=== Testing Apply Suggested Logs Action ==="
 echo ""
@@ -43,7 +47,7 @@ echo ""
 
 # Test 1: Check if script can parse analysis results
 echo "Test 1: Parsing analysis results..."
-python3 main.py \
+python3 actions/apply-suggested-logs/main.py \
     --pr-number "123" \
     --repository "test/repo" \
     --analysis-results "$SAMPLE_ANALYSIS" \
@@ -52,8 +56,7 @@ python3 main.py \
 echo ""
 echo "=== Test Complete ==="
 echo ""
-echo "Note: This is a dry-run test. To fully test:"
+echo "Note: This is a dry-run test. main.py expects --comment-body-file with ISSUE_DATA. To fully test:"
 echo "1. Set CURSOR_API_KEY and GITHUB_TOKEN"
 echo "2. Use a real PR number and repository"
-echo "3. Provide actual analysis results"
-
+echo "3. Provide a parent comment body file (with <!-- ISSUE_DATA: {...} -->)"

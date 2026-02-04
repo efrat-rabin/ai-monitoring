@@ -38,7 +38,7 @@ The recommended integration is to use `.github/workflows/pr-automation.yml`, whi
 - `main.py` - Applies a patch embedded in the analysis comment
 - `check_apply_trigger.py` - Checks for `/apply-logs` in comments
 - `post_apply_comment.py` - Posts success comment
-- `.github/prompts/apply-logs.txt` - AI prompt template
+- (Analysis prompts live in `.github/prompts/`; the apply step uses the patch from the analysis comment.)
 
 ## Example Analysis Input
 
