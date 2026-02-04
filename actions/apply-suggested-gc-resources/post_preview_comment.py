@@ -76,66 +76,37 @@ def extract_issue_data_from_comment(comment_body: str, verbose: bool = False) ->
         return {}
 
 
-def post_preview_comment(github_token: str, repository: str, pr_number: int, 
-                        comment_id: str, mock_monitor_path: str,
+def post_preview_comment(github_token: str, repository: str, pr_number: int,
+                        comment_id: str, monitor_path: str,
                         verbose: bool = False):
     """Post a monitor preview comment as reply to the /generate-monitor comment."""
     owner, repo = repository.split("/")
-    
-    # Load mock monitor data for title
-    with open(mock_monitor_path, 'r') as f:
-        monitor = yaml.safe_load(f)
-    
-    title = monitor.get('title', 'Monitor')
-    
-    print(f"[INFO] Preparing monitor preview for: {title}")
-    
-    # Default image URL
-    image_url = "https://raw.githubusercontent.com/efrat-rabin/ai-monitoring/main/assets/default.png"
-    
-    # Walk up thread to find root comment
-    root_comment = get_root_comment(github_token, repository, int(comment_id), verbose)
-    
-    if root_comment:
-        root_body = root_comment.get('body', '')
-        root_id = root_comment.get('id')
-        
-        print(f"[INFO] Root comment ID: {root_id}")
-        print(f"[INFO] Root comment body preview: {root_body[:200]}...")
-        
-        # Extract issue data from root comment
-        issue_data = extract_issue_data_from_comment(root_body, verbose)
-        
-        if issue_data:
-            print(f"[INFO] ✓ Extracted issue data")
-            print(f"[INFO] Issue severity: {issue_data.get('severity', 'N/A')}")
-            print(f"[INFO] Issue line: {issue_data.get('line', 'N/A')}")
-            print(f"[INFO] Issue monitor_image: {issue_data.get('monitor_image', 'N/A')}")
-            print(f"[INFO] Issue dashboard_image: {issue_data.get('dashboard_image', 'N/A')}")
-            
-            # Get monitor image from issue data
-            monitor_image = issue_data.get('monitor_image', '')
-            
-            if monitor_image:
-                image_url = f"https://raw.githubusercontent.com/efrat-rabin/ai-monitoring/main{monitor_image}"
-                print(f"[INFO] ✓ Using issue-specific monitor image: {monitor_image}")
-            else:
-                print(f"[INFO] No monitor_image in issue data, using default")
-        else:
-            print(f"[WARN] No issue data found in root comment, using default image")
-    else:
-        print(f"[WARN] Could not find root comment, using default image")
-    
-    print(f"[INFO] Final monitor preview image: {image_url}")
-    
-    # Create comment with image
-    comment_body = f"""## 🔍 GroundCover Monitor Preview
 
-![Monitor Preview]({image_url})
+    # Load monitor YAML from file
+    with open(monitor_path, 'r') as f:
+        monitor = yaml.safe_load(f)
+
+    title = monitor.get('title', 'Monitor')
+    print(f"[INFO] Preparing monitor preview for: {title}")
+
+    # Serialize monitor for the code block (readable YAML)
+    yaml_str = yaml.dump(monitor, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+    # Build comment: header + collapsible YAML block + footer
+    comment_body = """## GroundCover monitor preview
+
+<details>
+<summary>View full YAML</summary>
+
+```yaml
+""" + yaml_str + """
+```
+
+</details>
 
 ---
 
-**Reply with `/create-monitor` to create it.**
+**Reply with `/create-monitor` to create it in GroundCover.**
 
 _Preview by AI automation 🤖_"""
     
@@ -191,8 +162,9 @@ def main():
     parser.add_argument("--pr-number", type=str, required=True)
     parser.add_argument("--repository", type=str, required=True)
     parser.add_argument("--comment-id", type=str, required=True)
-    parser.add_argument("--mock-monitor", type=str, 
-                       default="actions/apply-suggested-gc-resources/mock-monitor.yaml")
+    parser.add_argument("--monitor", type=str,
+                        default="actions/apply-suggested-gc-resources/mock-monitor.yaml",
+                        help="Path to monitor YAML file")
     args = parser.parse_args()
     
     verbose = os.getenv('ACTIONS_STEP_DEBUG', 'false').lower() in ('true', '1')
@@ -202,7 +174,7 @@ def main():
         print(f"[DEBUG] PR Number: {args.pr_number}")
         print(f"[DEBUG] Repository: {args.repository}")
         print(f"[DEBUG] Comment ID: {args.comment_id}")
-        print(f"[DEBUG] Mock Monitor Path: {args.mock_monitor}")
+        print(f"[DEBUG] Monitor path: {args.monitor}")
     
     github_token = os.getenv("GITHUB_TOKEN")
     if not github_token:
@@ -218,7 +190,7 @@ def main():
             args.repository, 
             int(args.pr_number), 
             args.comment_id,
-            args.mock_monitor,
+            args.monitor,
             verbose=verbose
         )
         
