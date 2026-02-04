@@ -151,10 +151,25 @@ class CursorClient:
             
             # Warn if result is empty
             if not parsed or (isinstance(parsed, str) and not parsed.strip()):
+                ctx_len = len(context) if context else 0
                 print(f"WARNING: Cursor API returned empty result. This may indicate:")
                 print(f"  - Rate limiting or quota exhausted")
                 print(f"  - API key may not have access")
                 print(f"  - Prompt/context may be too long")
+                print(f"[INFO] Context length: prompt={len(prompt)} chars, context={ctx_len} chars, full_prompt={len(full_prompt)} chars")
+                print(f"[INFO] API key: {'set' if self.api_key else 'NOT SET'} ({len(self.api_key or '')} chars)")
+                if len(full_prompt) > 80_000:
+                    print(f"[INFO] Length is large - prompt/context may be too long for the API.")
+                else:
+                    print(f"[INFO] Length looks fine - more likely rate limit or API key/access.")
+                # Always show raw response preview so user can see API error (e.g. invalid key)
+                def _redact(s: str, max_len: int = 600) -> str:
+                    out = re.sub(r'sk-[a-zA-Z0-9_-]+', 'sk-***REDACTED***', s[:max_len])
+                    return out + ("..." if len(s) > max_len else "")
+                if result.stdout:
+                    print(f"[INFO] cursor-agent stdout preview: {_redact(result.stdout)}")
+                if result.stderr:
+                    print(f"[INFO] cursor-agent stderr: {_redact(result.stderr)}")
                 if verbose and result.stdout:
                     print(f"  - Full response: {result.stdout}")
             

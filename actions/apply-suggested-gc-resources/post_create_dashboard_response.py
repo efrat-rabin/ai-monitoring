@@ -3,79 +3,61 @@
 
 import os
 import sys
+from pathlib import Path
+
 import argparse
 import requests
 
+# Ensure libs is on path (workflow runs from repo root)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "libs"))
+import github_api  # noqa: E402
+from actions_env import add_common_pr_args, is_verbose, require_github_token  # noqa: E402
 
-def post_create_dashboard_response(github_token: str, repository: str, pr_number: int, 
+
+def post_create_dashboard_response(github_token: str, repository: str, pr_number: int,
                                    comment_id: str, verbose: bool = False):
     """Post a success message as reply to /create-dashboard comment."""
-    owner, repo = repository.split("/")
-    
     # Hardcoded GroundCover dashboard URL
     dashboard_url = "https://app.groundcover.com/grafana/d/entity-writer-kafka-consumer-env/e697dfa"
-    
-    print(f"[INFO] Posting dashboard creation success message")
-    
+
+    print("[INFO] Posting dashboard creation success message")
+
     comment_body = f"""✅ **Dashboard created in GroundCover observability system**
 
 [View Dashboard in GroundCover]({dashboard_url})
 
 _Created by AI automation 🤖_"""
-    
-    # Use PR review comments API
-    url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/comments"
-    headers = {
-        "Authorization": f"Bearer {github_token}",
-        "Accept": "application/vnd.github+json",
-    }
-    
-    payload = {
-        "body": comment_body,
-        "in_reply_to": int(comment_id)
-    }
-    
+
     if verbose:
         print(f"[DEBUG] Posting to PR #{pr_number}")
         print(f"[DEBUG] Reply to comment: {comment_id}")
-    
-    response = requests.post(url, headers=headers, json=payload)
-    
-    print(f"[INFO] Response status: {response.status_code}")
-    
-    if response.status_code != 201:
-        print(f"[ERROR] Failed to post comment: {response.text}")
-    
-    response.raise_for_status()
-    
-    if verbose:
-        response_data = response.json()
-        print(f"[DEBUG] Comment ID: {response_data.get('id')}")
-        print(f"[DEBUG] Comment URL: {response_data.get('html_url')}")
-    
+
+    comment_id_out = github_api.post_pr_review_comment_and_return_id(
+        github_token,
+        repository,
+        pr_number,
+        comment_body,
+        in_reply_to=int(comment_id),
+        verbose=verbose,
+    )
     print("✓ Dashboard creation response posted")
-    
-    return response.json().get('id')
+    return comment_id_out
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--pr-number", type=str, required=True)
-    parser.add_argument("--repository", type=str, required=True)
-    parser.add_argument("--comment-id", type=str, required=True)
+    add_common_pr_args(parser)
     args = parser.parse_args()
-    
-    verbose = os.getenv('ACTIONS_STEP_DEBUG', 'false').lower() in ('true', '1')
-    
+
+    verbose = is_verbose()
     if verbose:
-        print(f"[DEBUG] Running post_create_dashboard_response.py")
+        print("[DEBUG] Running post_create_dashboard_response.py")
         print(f"[DEBUG] PR Number: {args.pr_number}")
         print(f"[DEBUG] Repository: {args.repository}")
         print(f"[DEBUG] Comment ID: {args.comment_id}")
-    
-    github_token = os.getenv("GITHUB_TOKEN")
+
+    github_token = require_github_token()
     if not github_token:
-        print("ERROR: GITHUB_TOKEN not set")
         return 1
     
     try:

@@ -3,90 +3,29 @@
 
 import os
 import sys
+from pathlib import Path
+
 import argparse
-import json
-import re
 import yaml
 import requests
 
-
-def get_root_comment(github_token: str, repository: str, comment_id: int, verbose: bool = False) -> dict:
-    """Walk up the thread to find the first (root) comment."""
-    owner, repo = repository.split("/")
-    current_id = comment_id
-    visited = set()  # Prevent infinite loops
-    
-    print(f"[INFO] Walking up thread to find root comment, starting from comment #{current_id}")
-    
-    while current_id and current_id not in visited:
-        visited.add(current_id)
-        
-        url = f"https://api.github.com/repos/{owner}/{repo}/pulls/comments/{current_id}"
-        headers = {
-            "Authorization": f"Bearer {github_token}",
-            "Accept": "application/vnd.github+json",
-        }
-        
-        try:
-            response = requests.get(url, headers=headers)
-            response.raise_for_status()
-            comment = response.json()
-            
-            in_reply_to = comment.get('in_reply_to_id')
-            
-            if verbose:
-                print(f"[DEBUG] Comment #{current_id}, in_reply_to_id={in_reply_to}")
-            
-            # If this comment has no parent, it's the root
-            if not in_reply_to:
-                print(f"[INFO] ✓ Found root comment: #{current_id}")
-                return comment
-            
-            # Otherwise, move up to parent
-            print(f"[INFO] Moving up: #{current_id} -> #{in_reply_to}")
-            current_id = in_reply_to
-            
-        except Exception as e:
-            print(f"[ERROR] Failed to get comment #{current_id}: {e}")
-            return None
-    
-    print(f"[WARN] Could not find root comment (loop or error)")
-    return None
-
-
-def extract_issue_data_from_comment(comment_body: str, verbose: bool = False) -> dict:
-    """Extract issue data from hidden JSON in comment."""
-    json_match = re.search(r'<!-- ISSUE_DATA: (.+?) -->', comment_body, re.DOTALL)
-    
-    if not json_match:
-        if verbose:
-            print(f"[DEBUG] No ISSUE_DATA found in comment")
-        return {}
-    
-    try:
-        raw_json = json_match.group(1)
-        issue_data = json.loads(raw_json)
-        
-        if verbose:
-            print(f"[DEBUG] Extracted issue data with keys: {list(issue_data.keys())}")
-        
-        return issue_data
-    except json.JSONDecodeError as e:
-        print(f"[ERROR] Failed to parse issue JSON: {e}")
-        return {}
+# Ensure libs and same dir are on path (workflow runs from repo root)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "libs"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import github_api  # noqa: E402
+from actions_env import add_common_pr_args, is_verbose, require_github_token  # noqa: E402
+from github_comment_utils import extract_issue_data_from_comment, get_root_comment  # noqa: E402
 
 
 def post_preview_comment(github_token: str, repository: str, pr_number: int,
                         comment_id: str, monitor_path: str,
                         verbose: bool = False):
     """Post a monitor preview comment as reply to the /generate-monitor comment."""
-    owner, repo = repository.split("/")
-
     # Load monitor YAML from file
-    with open(monitor_path, 'r') as f:
+    with open(monitor_path, "r") as f:
         monitor = yaml.safe_load(f)
 
-    title = monitor.get('title', 'Monitor')
+    title = monitor.get("title", "Monitor")
     print(f"[INFO] Preparing monitor preview for: {title}")
 
     # Serialize monitor for the code block (readable YAML)
@@ -109,80 +48,46 @@ def post_preview_comment(github_token: str, repository: str, pr_number: int,
 **Reply with `/create-monitor` to create it in GroundCover.**
 
 _Preview by AI automation 🤖_"""
-    
-    # Use PR review comments API
-    url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/comments"
-    headers = {
-        "Authorization": f"Bearer {github_token}",
-        "Accept": "application/vnd.github+json",
-    }
-    
-    payload = {
-        "body": comment_body,
-        "in_reply_to": int(comment_id)
-    }
-    
+
     print(f"[INFO] Posting comment to PR #{pr_number}")
     print(f"[INFO] Comment will be reply to comment ID: {comment_id}")
-    print(f"[INFO] URL: {url}")
-    print(f"[INFO] Payload: {json.dumps(payload, indent=2)}")
-    
     if verbose:
         print(f"[DEBUG] Monitor: {title}")
         print(f"[DEBUG] Comment body length: {len(comment_body)} chars")
-    
-    response = requests.post(url, headers=headers, json=payload)
-    
-    print(f"[INFO] Comment API response status: {response.status_code}")
-    
-    if response.status_code != 201:
-        print(f"[ERROR] Comment posting failed!")
-        print(f"[ERROR] Response status: {response.status_code}")
-        print(f"[ERROR] Response body: {response.text}")
-        try:
-            error_data = response.json()
-            print(f"[ERROR] Error details: {json.dumps(error_data, indent=2)}")
-        except:
-            pass
-    
-    response.raise_for_status()
-    
-    if verbose:
-        response_data = response.json()
-        print(f"[DEBUG] Preview comment posted successfully")
-        print(f"[DEBUG] Comment ID: {response_data.get('id')}")
-        print(f"[DEBUG] Comment URL: {response_data.get('html_url')}")
-    
+
+    comment_id_out = github_api.post_pr_review_comment_and_return_id(
+        github_token,
+        repository,
+        pr_number,
+        comment_body,
+        in_reply_to=int(comment_id),
+        verbose=verbose,
+    )
     print("✓ Monitor preview comment posted")
-    return response.json().get('id')
+    return comment_id_out
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--pr-number", type=str, required=True)
-    parser.add_argument("--repository", type=str, required=True)
-    parser.add_argument("--comment-id", type=str, required=True)
+    add_common_pr_args(parser)
     parser.add_argument("--monitor", type=str,
                         default="actions/apply-suggested-gc-resources/mock-monitor.yaml",
                         help="Path to monitor YAML file")
     args = parser.parse_args()
-    
-    verbose = os.getenv('ACTIONS_STEP_DEBUG', 'false').lower() in ('true', '1')
-    
+
+    verbose = is_verbose()
     if verbose:
-        print(f"[DEBUG] Running post_preview_comment.py with verbose mode")
+        print("[DEBUG] Running post_preview_comment.py with verbose mode")
         print(f"[DEBUG] PR Number: {args.pr_number}")
         print(f"[DEBUG] Repository: {args.repository}")
         print(f"[DEBUG] Comment ID: {args.comment_id}")
         print(f"[DEBUG] Monitor path: {args.monitor}")
-    
-    github_token = os.getenv("GITHUB_TOKEN")
+
+    github_token = require_github_token()
     if not github_token:
-        print("ERROR: GITHUB_TOKEN not set")
         return 1
-    
     if verbose:
-        print(f"[DEBUG] GITHUB_TOKEN present: True")
+        print("[DEBUG] GITHUB_TOKEN present: True")
     
     try:
         preview_comment_id = post_preview_comment(
