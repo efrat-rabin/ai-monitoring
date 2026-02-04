@@ -20,5 +20,6 @@ def batch_process(items):
     for i, x in enumerate(items):
         y = x.strip()
         if not y:
+            logger.warning('batch_process_empty_item', {'item_index': i, 'original_value': x})
             return False
     return True
