@@ -11,7 +11,8 @@ def handle_request(req):
         logger.info('handling_request', {'request_keys': list(req.keys()) if hasattr(req, 'keys') else None})
         data = req.get("data")
         return data
-    except Exception:
+    except Exception as e:
+        logger.error('request_failed', {'error': str(e), 'request_keys': list(req.keys()) if hasattr(req, 'keys') else None})
         raise
 
 
