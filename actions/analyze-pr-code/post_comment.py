@@ -19,6 +19,16 @@ from comment_state import APPLY_LOGS_LINE, STATE_ANALYZED, status_marker
 import github_api
 from file_utils import sha256_hex
 
+# Severity order: lower rank = more severe. Show issues with rank <= min_issue_level rank.
+SEVERITY_RANK = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+MIN_ISSUE_LEVEL_CHOICES = ("critical", "high", "medium", "low")
+
+
+def severity_rank(severity: str) -> int:
+    """Return numeric rank for severity (lower = more severe). Unknown severities default to MEDIUM."""
+    key = (severity or "MEDIUM").strip().upper()
+    return SEVERITY_RANK.get(key, SEVERITY_RANK["MEDIUM"])
+
 
 def compute_file_hash(file_path: str) -> str:
     """Compute SHA256 hash of a file for change detection."""
@@ -175,8 +185,16 @@ def main():
     parser.add_argument("--repository", type=str, required=True)
     parser.add_argument("--results-file", type=str, default="analysis-results.json")
     parser.add_argument("--commit-sha", type=str, required=True, help="Commit SHA to comment on")
-    
+    parser.add_argument(
+        "--min-issue-level",
+        type=str,
+        default=os.getenv("MIN_ISSUE_LEVEL", "high"),
+        choices=MIN_ISSUE_LEVEL_CHOICES,
+        help="Minimum issue level to show (critical, high, medium, low). Default: high (show high and above).",
+    )
+
     args = parser.parse_args()
+    min_level_rank = SEVERITY_RANK[args.min_issue_level.upper()]
     
     github_token = os.getenv("GITHUB_TOKEN")
     if not github_token:
@@ -204,27 +222,33 @@ def main():
     # Post review comments on specific lines
     total_comments = 0
     skipped_not_in_diff = 0
-    
+    skipped_below_level = 0
+
     for result in results:
         file_path = result.get("file")
         analysis = result.get("analysis", {})
         issues = analysis.get("issues", [])
-        
+
         # Get changed lines for this file
         file_changed_lines = changed_lines.get(file_path, set())
-        
+
         for issue in issues:
             line = issue.get("line")
             if not line or line == "N/A":
                 print(f"Skipping {file_path} - no line number")
                 continue
-            
+
+            # Filter by minimum issue level (show only severity at or above min)
+            if severity_rank(issue.get("severity", "MEDIUM")) > min_level_rank:
+                skipped_below_level += 1
+                continue
+
             # Check if the line is in the PR diff
             if file_changed_lines and line not in file_changed_lines:
                 print(f"Skipping {file_path}:{line} - line not in PR diff")
                 skipped_not_in_diff += 1
                 continue
-            
+
             method = issue.get("method", "N/A")
             print(f"Posting review comment on {file_path}:{line} ({method})")
             
@@ -243,6 +267,8 @@ def main():
     
     if skipped_not_in_diff > 0:
         print(f"\n⚠️ Skipped {skipped_not_in_diff} issue(s) not in PR diff")
+    if skipped_below_level > 0:
+        print(f"\n⚠️ Skipped {skipped_below_level} issue(s) below minimum level {args.min_issue_level}")
 
     print(f"✅ Posted {total_comments} review comment(s)")
     return 0

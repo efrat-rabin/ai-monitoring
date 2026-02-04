@@ -25,6 +25,11 @@ on:
         type: boolean
         required: false
         default: false
+      min_issue_level:
+        description: 'Minimum issue level to show (critical, high, medium, low). Default: high (show high and above).'
+        type: string
+        required: false
+        default: high
     secrets:
       cursor_api_key:
         description: 'Cursor API key for AI analysis'
@@ -113,7 +118,8 @@ jobs:
             --pr-number ${{ steps.pr_info.outputs.pr_number }} \
             --repository ${{ steps.pr_info.outputs.repository }} \
             --commit-sha ${{ github.event.pull_request.head.sha }} \
-            --results-file analysis-results.json
+            --results-file analysis-results.json \
+            --min-issue-level ${{ inputs.min_issue_level || 'high' }}
 
   # Apply fixes when developer replies to a comment with /apply-logs
   apply-logs:
