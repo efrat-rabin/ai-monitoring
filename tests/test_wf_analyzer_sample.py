@@ -7,6 +7,7 @@ def process_item(item):
 
 
 def handle_request(req):
+    logger.info('handling_request', {'has_data': 'data' in req if isinstance(req, dict) else False})
     try:
         data = req.get("data")
         return data
