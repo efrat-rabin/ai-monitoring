@@ -7,11 +7,15 @@ import os
 import sys
 import argparse
 import json
-import hashlib
 import subprocess
 import tempfile
 from pathlib import Path
 from typing import Dict, Any, Optional
+
+# Add libs for comment_parsing and file_utils
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "libs"))
+from comment_parsing import extract_issue_data as extract_issue_data_shared  # noqa: E402
+from file_utils import sha256_hex  # noqa: E402
 
 # Import patch validation utilities
 sys.path.insert(0, str(Path(__file__).parent.parent / "analyze-pr-code"))
@@ -36,10 +40,10 @@ class PatchApplier:
         """Verify file hasn't changed since analysis."""
         if not os.path.exists(file_path):
             return False
-        
-        with open(file_path, 'rb') as f:
-            current_hash = hashlib.sha256(f.read()).hexdigest()
-        
+        try:
+            current_hash = sha256_hex(file_path)
+        except OSError:
+            return False
         if self.verbose:
             print(f"[DEBUG] File hash verification:")
             print(f"  Expected: {expected_hash}")
@@ -248,41 +252,32 @@ class PatchApplier:
    
 def parse_issue_from_comment(comment_body: str) -> Optional[Dict[str, Any]]:
     """Parse issue details from a comment body."""
-    import re
-    
-    # Try to extract from hidden JSON metadata
-    json_match = re.search(r'<!-- ISSUE_DATA: (.+?) -->', comment_body, re.DOTALL)
-    
-    if not json_match:
+    metadata = extract_issue_data_shared(comment_body)
+    if metadata is None:
         print("⚠️  No JSON metadata found in comment - cannot determine file path")
         return None
-    
-    try:
-        metadata = json.loads(json_match.group(1))
-        
-        # Validate required fields
-        if 'file' not in metadata:
-            print("ERROR: Missing 'file' field in metadata")
-            return None
-        
-        if 'patch' not in metadata:
-            print("ERROR: Missing 'patch' field in metadata")
-            print("This workflow requires analysis to generate unified diff patches.")
-            return None
-        
-        return {
-            'file': metadata['file'],
-            'patch': metadata['patch'],
-            'file_hash': metadata.get('file_hash'),
-            'severity': metadata.get('severity', 'MEDIUM'),
-            'category': metadata.get('category', 'logging'),
-            'method': metadata.get('method', 'N/A'),
-            'line': metadata.get('line', 0),
-            'description': metadata.get('description', ''),
-        }
-    except (json.JSONDecodeError, KeyError) as e:
-        print(f"⚠️  Failed to parse JSON metadata: {e}")
+
+    # Validate required fields
+    if "file" not in metadata:
+        print("ERROR: Missing 'file' field in metadata")
         return None
+
+    if "patch" not in metadata:
+        print("ERROR: Missing 'patch' field in metadata")
+        print("This workflow requires analysis to generate unified diff patches.")
+        return None
+
+    return {
+        "file": metadata["file"],
+        "patch": metadata["patch"],
+        "file_hash": metadata.get("file_hash"),
+        "severity": metadata.get("severity", "MEDIUM"),
+        "category": metadata.get("category", "logging"),
+        "method": metadata.get("method", "N/A"),
+        "line": metadata.get("line", 0),
+        "description": metadata.get("description", ""),
+        "commit_message": metadata.get("commit_message", ""),
+    }
 
 
 def main():
@@ -331,24 +326,15 @@ def main():
     # Debug: Show the comment body structure
     print(f"\n🔍 DEBUG: Comment body info:")
     print(f"  Total length: {len(comment_body)} characters")
-    print(f"  Contains ISSUE_DATA: {'ISSUE_DATA' in comment_body}")
-    if 'ISSUE_DATA' in comment_body:
-        import re
-        json_match = re.search(r'<!-- ISSUE_DATA: (.+?) -->', comment_body, re.DOTALL)
-        if json_match:
-            raw_json = json_match.group(1)
-            print(f"  JSON metadata length: {len(raw_json)} characters")
-            print(f"\n📋 Full ISSUE_DATA JSON:")
-            print("=" * 80)
-            try:
-                # Pretty print the JSON for readability
-                parsed_json = json.loads(raw_json)
-                print(json.dumps(parsed_json, indent=2))
-            except:
-                # If can't parse, just show raw
-                print(raw_json)
-            print("=" * 80)
-    
+    metadata_debug = extract_issue_data_shared(comment_body)
+    print(f"  Contains ISSUE_DATA: {metadata_debug is not None}")
+    if metadata_debug is not None:
+        print(f"  JSON metadata length: {len(json.dumps(metadata_debug))} characters")
+        print(f"\n📋 Full ISSUE_DATA JSON:")
+        print("=" * 80)
+        print(json.dumps(metadata_debug, indent=2))
+        print("=" * 80)
+
     issue = parse_issue_from_comment(comment_body)
     
     if not issue:
@@ -403,12 +389,10 @@ def main():
         print(f"\n✓ Successfully applied patch to {file_path}")
         
         # Output commit message for the workflow to use
-        commit_message = parsed_json.get('commit_message')
-        
-        # Debug: show what we got
-        print(f"[DEBUG] commit_message key exists: {'commit_message' in parsed_json}")
-        print(f"[DEBUG] commit_message value: {repr(parsed_json)}")
-        print(f"[DEBUG] commit_message type: {type(parsed_json)}")
+        commit_message = issue.get("commit_message", "")
+        if verbose:
+            print(f"[DEBUG] commit_message key exists: {'commit_message' in issue}")
+            print(f"[DEBUG] commit_message value: {repr(commit_message)}")
         
         if commit_message and commit_message.strip():
             # Set GitHub Actions output

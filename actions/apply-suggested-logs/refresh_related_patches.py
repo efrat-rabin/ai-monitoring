@@ -14,7 +14,6 @@ Behavior:
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import re
@@ -27,12 +26,16 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import requests
 
-# Add libs directory to path for CursorClient
+# Add libs directory to path for CursorClient and github_api
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "libs"))
 from cursor_client import CursorClient  # type: ignore
+import github_api  # type: ignore
 
-# comment_state is in libs/ (path includes libs above)
+# comment_state, comment_parsing, actions_env are in libs/
 from comment_state import APPLY_LOGS_LINE, is_analyzed_state  # type: ignore
+from comment_parsing import ISSUE_DATA_RE, extract_issue_data as extract_issue_data_from_comment  # type: ignore
+from file_utils import sha256_hex  # type: ignore
+import actions_env  # type: ignore
 
 # Import patch validation utilities (best-effort)
 sys.path.insert(0, str(Path(__file__).parent.parent / "analyze-pr-code"))
@@ -42,9 +45,6 @@ try:
     PATCH_VALIDATION_AVAILABLE = True
 except Exception:
     PATCH_VALIDATION_AVAILABLE = False
-
-
-ISSUE_DATA_RE = re.compile(r"<!--\s*ISSUE_DATA:\s*(.+?)\s*-->", re.DOTALL)
 
 
 @dataclass(frozen=True)
@@ -75,7 +75,7 @@ def is_bot_issue_comment(comment: ReviewComment) -> bool:
 
 
 def _verbose_enabled() -> bool:
-    return os.getenv("ACTIONS_STEP_DEBUG", "false").lower() in ("true", "1")
+    return actions_env.is_verbose()
 
 
 def _log(msg: str) -> None:
@@ -87,22 +87,8 @@ def _debug(msg: str) -> None:
         print(f"[DEBUG] {msg}")
 
 
-def _github_headers(token: str) -> Dict[str, str]:
-    return {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-    }
-
-
-def _split_owner_repo(repository: str) -> Tuple[str, str]:
-    if "/" not in repository:
-        raise ValueError(f"Invalid --repository (expected owner/repo): {repository}")
-    owner, repo = repository.split("/", 1)
-    return owner, repo
-
-
 def _request_json(method: str, url: str, token: str, **kwargs) -> Any:
-    headers = _github_headers(token)
+    headers = github_api.github_headers(token)
     headers.update(kwargs.pop("headers", {}))
     resp = requests.request(method, url, headers=headers, **kwargs)
     if _verbose_enabled():
@@ -116,9 +102,7 @@ def _request_json(method: str, url: str, token: str, **kwargs) -> Any:
 
 
 def get_review_comment_by_id(token: str, repository: str, comment_id: int) -> ReviewComment:
-    owner, repo = _split_owner_repo(repository)
-    url = f"https://api.github.com/repos/{owner}/{repo}/pulls/comments/{comment_id}"
-    data = _request_json("GET", url, token)
+    data = github_api.get_pr_comment(token, repository, comment_id)
     return ReviewComment(
         id=int(data.get("id")),
         body=data.get("body") or "",
@@ -128,13 +112,12 @@ def get_review_comment_by_id(token: str, repository: str, comment_id: int) -> Re
 
 
 def list_pr_review_comments(token: str, repository: str, pr_number: int) -> List[ReviewComment]:
-    owner, repo = _split_owner_repo(repository)
     comments: List[ReviewComment] = []
     page = 1
     per_page = 100
 
     while True:
-        url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/comments"
+        url = github_api.pr_comments_url(repository, pr_number)
         data = _request_json("GET", url, token, params={"per_page": per_page, "page": page})
         if not isinstance(data, list):
             raise RuntimeError("Unexpected API response for PR comments (expected list)")
@@ -157,24 +140,7 @@ def list_pr_review_comments(token: str, repository: str, pr_number: int) -> List
 
 
 def update_review_comment_body(token: str, repository: str, comment_id: int, new_body: str) -> None:
-    owner, repo = _split_owner_repo(repository)
-    url = f"https://api.github.com/repos/{owner}/{repo}/pulls/comments/{comment_id}"
-    _request_json("PATCH", url, token, json={"body": new_body})
-
-
-def extract_issue_data(comment_body: str) -> Optional[Dict[str, Any]]:
-    m = ISSUE_DATA_RE.search(comment_body)
-    if not m:
-        return None
-    raw = m.group(1)
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        # Sometimes JSON may contain leading/trailing whitespace/newlines; try stripping.
-        try:
-            return json.loads(raw.strip())
-        except Exception:
-            return None
+    github_api.patch_pr_comment(token, repository, comment_id, new_body)
 
 
 def replace_issue_data(comment_body: str, new_metadata: Dict[str, Any]) -> str:
@@ -203,8 +169,7 @@ def parse_int_line(value: Any) -> Optional[int]:
 
 
 def sha256_file(path: str) -> str:
-    with open(path, "rb") as f:
-        return hashlib.sha256(f.read()).hexdigest()
+    return sha256_hex(path)
 
 
 def read_text_file(path: str) -> str:
@@ -419,7 +384,7 @@ def _get_refresh_candidates(
             continue
         if not is_analyzed_state(c.body):
             continue
-        meta = extract_issue_data(c.body)
+        meta = extract_issue_data_from_comment(c.body)
         if not meta:
             continue
         file_path = meta.get("file")
@@ -570,7 +535,7 @@ def main() -> int:
 
     verbose = _verbose_enabled()
 
-    github_token = os.getenv("GITHUB_TOKEN")
+    github_token = actions_env.require_github_token()
     if not github_token:
         _log("ERROR: GITHUB_TOKEN not set")
         return 1
@@ -620,7 +585,7 @@ def main() -> int:
         _log("ERROR: Need applied comment body. Provide --applied-comment-body-file or --applied-parent-comment-id.")
         return 1
 
-    applied_issue = extract_issue_data(applied_body)
+    applied_issue = extract_issue_data_from_comment(applied_body)
     if not applied_issue:
         _log("ERROR: Could not parse ISSUE_DATA from applied parent comment body.")
         return 1
@@ -649,7 +614,7 @@ def main() -> int:
             continue
         if not is_analyzed_state(c.body):
             continue
-        meta = extract_issue_data(c.body)
+        meta = extract_issue_data_from_comment(c.body)
         if not meta:
             continue
         file_path = meta.get("file")

@@ -14,6 +14,13 @@ from typing import Any, Optional
 
 import requests
 
+try:
+    from . import actions_env
+    from . import github_api
+except ImportError:
+    import actions_env  # when libs is on PYTHONPATH (e.g. workflow)
+    import github_api
+
 # Marker in comment body: <!-- STATUS: <state> -->
 STATUS_RE = re.compile(r"<!--\s*STATUS:\s*(\w+)\s*-->")
 
@@ -87,27 +94,17 @@ def _set_github_output(key: str, value: str) -> None:
 
 
 def _get_comment(github_token: str, repository: str, comment_id: int) -> Any:
-    owner, repo = repository.split("/", 1)
-    url = f"https://api.github.com/repos/{owner}/{repo}/pulls/comments/{comment_id}"
-    headers = {"Authorization": f"Bearer {github_token}", "Accept": "application/vnd.github+json"}
-    resp = requests.get(url, headers=headers)
-    resp.raise_for_status()
-    return resp.json()
+    return github_api.get_pr_comment(github_token, repository, comment_id)
 
 
 def _patch_comment(github_token: str, repository: str, comment_id: int, body: str) -> None:
-    owner, repo = repository.split("/", 1)
-    url = f"https://api.github.com/repos/{owner}/{repo}/pulls/comments/{comment_id}"
-    headers = {"Authorization": f"Bearer {github_token}", "Accept": "application/vnd.github+json"}
-    resp = requests.patch(url, headers=headers, json={"body": body})
-    resp.raise_for_status()
+    github_api.patch_pr_comment(github_token, repository, comment_id, body)
 
 
 def _cmd_check(args: argparse.Namespace) -> int:
-    verbose = os.getenv("ACTIONS_STEP_DEBUG", "false").lower() in ("true", "1")
-    github_token = os.getenv("GITHUB_TOKEN")
+    verbose = actions_env.is_verbose()
+    github_token = actions_env.require_github_token()
     if not github_token:
-        print("ERROR: GITHUB_TOKEN not set")
         _set_github_output("should_apply", "false")
         return 1
     try:
@@ -143,10 +140,9 @@ def _cmd_check(args: argparse.Namespace) -> int:
 
 
 def _cmd_set(args: argparse.Namespace) -> int:
-    verbose = os.getenv("ACTIONS_STEP_DEBUG", "false").lower() in ("true", "1")
-    github_token = os.getenv("GITHUB_TOKEN")
+    verbose = actions_env.is_verbose()
+    github_token = actions_env.require_github_token()
     if not github_token:
-        print("ERROR: GITHUB_TOKEN not set")
         return 1
     comment_id = int(args.parent_comment_id.strip())
     try:

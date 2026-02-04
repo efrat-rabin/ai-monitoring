@@ -155,6 +155,7 @@ class CursorClient:
                 print(f"  - Rate limiting or quota exhausted")
                 print(f"  - API key may not have access")
                 print(f"  - Prompt/context may be too long")
+                print(f"[INFO] Context length for debugging: prompt={len(prompt)} chars, context={len(context) if context else 0} chars, full_prompt={len(full_prompt)} chars")
                 if verbose and result.stdout:
                     print(f"  - Full response: {result.stdout}")
             

@@ -2,45 +2,38 @@
 """Create monitor in GroundCover from YAML in parent comment, or post no-permission message."""
 
 import os
-import re
 import sys
+from pathlib import Path
+
 import argparse
 import requests
 
+# Ensure libs is on path (workflow runs from repo root)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "libs"))
+import github_api  # noqa: E402
+from actions_env import add_common_pr_args, is_verbose, require_github_token  # noqa: E402
+from code_block import extract_code_block  # noqa: E402
 
 GROUNDCOVER_MONITORS_URL = "https://app.groundcover.com/monitors"
 
 
 def _get_comment(github_token: str, repository: str, comment_id: int) -> dict:
     """Fetch a PR review comment by ID."""
-    owner, repo = repository.split("/")
-    url = f"https://api.github.com/repos/{owner}/{repo}/pulls/comments/{comment_id}"
-    headers = {"Authorization": f"Bearer {github_token}", "Accept": "application/vnd.github+json"}
-    resp = requests.get(url, headers=headers)
-    resp.raise_for_status()
-    return resp.json()
+    return github_api.get_pr_comment(github_token, repository, comment_id)
 
 
 def _extract_yaml_from_comment_body(body: str) -> str:
-    """Extract YAML from a comment body (```yaml ... ``` block)."""
-    match = re.search(r"```yaml\s*\n(.*?)\n```", body, re.DOTALL)
-    if match:
-        return match.group(1).strip()
-    match = re.search(r"```\s*\n(.*?)\n```", body, re.DOTALL)
-    if match:
-        return match.group(1).strip()
-    return ""
+    """Extract YAML from a comment body (```yaml ... ``` or ``` ... ``` block)."""
+    return extract_code_block(body, "yaml")
 
 
 def _post_comment(
     github_token: str, repository: str, pr_number: int, comment_id: int, body: str
 ) -> int:
     """Post a PR review comment as reply to comment_id. Returns the new comment ID."""
-    owner, repo = repository.split("/")
-    url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/comments"
-    headers = {"Authorization": f"Bearer {github_token}", "Accept": "application/vnd.github+json"}
-    payload = {"body": body, "in_reply_to": comment_id}
-    resp = requests.post(url, headers=headers, json=payload)
+    resp = github_api.post_pr_review_comment(
+        github_token, repository, pr_number, body, in_reply_to=comment_id
+    )
     resp.raise_for_status()
     return resp.json().get("id")
 
@@ -152,15 +145,12 @@ _Created by AI automation 🤖_"""
 
 def main():
     parser = argparse.ArgumentParser(description="Create monitor in GroundCover or post manual instructions")
-    parser.add_argument("--pr-number", type=str, required=True)
-    parser.add_argument("--repository", type=str, required=True)
-    parser.add_argument("--comment-id", type=str, required=True)
+    add_common_pr_args(parser)
     args = parser.parse_args()
 
-    verbose = os.getenv("ACTIONS_STEP_DEBUG", "false").lower() in ("true", "1")
-    github_token = os.getenv("GITHUB_TOKEN")
+    verbose = is_verbose()
+    github_token = require_github_token()
     if not github_token:
-        print("ERROR: GITHUB_TOKEN not set")
         return 1
 
     return run_create_monitor(

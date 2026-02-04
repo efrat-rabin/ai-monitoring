@@ -6,22 +6,26 @@ Posts review comments on specific code lines.
 
 import os
 import sys
-import json
-import argparse
-import hashlib
-import requests
-from typing import Dict, List, Any
+from pathlib import Path
 
+import argparse
+import json
+import requests
+from typing import Any, Dict, List
+
+# Ensure libs is on path (workflow sets PYTHONPATH to .ai-monitoring/libs)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "libs"))
 from comment_state import APPLY_LOGS_LINE, STATE_ANALYZED, status_marker
+import github_api
+from file_utils import sha256_hex
 
 
 def compute_file_hash(file_path: str) -> str:
     """Compute SHA256 hash of a file for change detection."""
     try:
-        with open(file_path, 'rb') as f:
-            return hashlib.sha256(f.read()).hexdigest()
-    except Exception as e:
-        print(f"Warning: Could not compute hash for {file_path}: {e}")
+        return sha256_hex(file_path)
+    except OSError as e:
+        print(f"Warning: {e}")
         return ""
 
 
@@ -96,14 +100,9 @@ def get_pr_changed_lines(
     pr_number: int
 ) -> Dict[str, set]:
     """Get a map of file paths to their changed line numbers."""
-    owner, repo = repository.split("/")
-    url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/files"
-    
-    headers = {
-        "Authorization": f"Bearer {github_token}",
-        "Accept": "application/vnd.github+json",
-    }
-    
+    url = github_api.pr_files_url(repository, pr_number)
+    headers = github_api.github_headers(github_token)
+
     try:
         response = requests.get(url, headers=headers)
         response.raise_for_status()
@@ -145,28 +144,23 @@ def post_review_comment(
     pr_number: int,
     commit_sha: str,
     file_path: str,
-    line: int,   
+    line: int,
     comment_body: str
 ) -> bool:
     """Post a review comment on a specific line."""
-    owner, repo = repository.split("/")
-    url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/comments"
-    
-    headers = {
-        "Authorization": f"Bearer {github_token}",
-        "Accept": "application/vnd.github+json",
-    }
-    
     payload = {
         "body": comment_body,
         "commit_id": commit_sha,
         "path": file_path,
         "line": line,
-        "side": "RIGHT"
+        "side": "RIGHT",
     }
-    
     try:
-        response = requests.post(url, headers=headers, json=payload)
+        response = github_api.post_pr_review_comment(
+            github_token, repository, pr_number,
+            body="",  # unused when payload is provided
+            payload=payload,
+        )
         response.raise_for_status()
         return True
     except Exception as e:
