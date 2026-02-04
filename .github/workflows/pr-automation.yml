@@ -455,10 +455,12 @@ jobs:
           cd .ai-monitoring
           pip install -r requirements.txt
       
-      - name: Post monitor creation response
+      - name: Create monitor or post manual instructions
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GROUNDCOVER_API_KEY: ${{ secrets.GROUNDCOVER_API_KEY }}
         run: |
+          export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/.ai-monitoring:${GITHUB_WORKSPACE}/.ai-monitoring/libs"
           python .ai-monitoring/actions/apply-suggested-gc-resources/post_create_monitor_response.py \
             --pr-number ${{ steps.pr_info.outputs.pr_number }} \
             --repository ${{ steps.pr_info.outputs.repository }} \
