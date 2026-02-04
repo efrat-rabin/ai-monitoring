@@ -31,7 +31,7 @@ import requests
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "libs"))
 from cursor_client import CursorClient  # type: ignore
 
-# comment_state is in shared/ (expect PYTHONPATH to include .ai-monitoring/shared)
+# comment_state is in libs/ (path includes libs above)
 from comment_state import APPLY_LOGS_LINE, is_analyzed_state  # type: ignore
 
 # Import patch validation utilities (best-effort)

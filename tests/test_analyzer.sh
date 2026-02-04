@@ -1,7 +1,10 @@
 #!/bin/bash
 # Test script for code analyzer with mock data
+# Run from repo root: bash tests/test_analyzer.sh [mock|test|cursor]
 
 set -e
+
+cd "$(git rev-parse --show-toplevel)"
 
 # Set minimal required env vars
 export GITHUB_TOKEN="${GITHUB_TOKEN:-fake-token-for-testing}"
@@ -63,4 +66,3 @@ else
     echo "ERROR: No results file generated"
     exit 1
 fi
-

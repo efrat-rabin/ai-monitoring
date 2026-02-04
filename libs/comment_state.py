@@ -114,7 +114,7 @@ def _cmd_check(args: argparse.Namespace) -> int:
         parent = _get_comment(github_token, args.repository, int(args.in_reply_to_id))
         trigger = _get_comment(github_token, args.repository, int(args.comment_id))
     except Exception as e:
-        logger.error('github_api_comments_fetch_failed', {'repository': args.repository, 'parent_comment_id': args.in_reply_to_id, 'trigger_comment_id': args.comment_id, 'error': str(e), 'error_type': type(e).__name__})
+        print(f"ERROR: Failed to fetch comments: {e}")
         if verbose:
             import traceback
             traceback.print_exc()

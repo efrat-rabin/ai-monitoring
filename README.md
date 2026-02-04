@@ -16,13 +16,23 @@ This repository contains GitHub Actions workflows for AI-powered code monitoring
 │   ├── apply-suggested-logs/
 │   │   └── main.py
 │   └── apply-suggested-gc-resources/
-│       ├── main.py
-│       ├── ai_analyzer.py
+│       ├── generate_monitor_yaml.py   # /generate-monitor
+│       ├── post_create_monitor_response.py
+│       ├── post_dashboard_preview.py
+│       ├── post_create_dashboard_response.py
 │       ├── groundcover_client.py
+│       ├── post_preview_comment.py
 │       └── prompts.py
 ├── libs/                   # Shared libraries
-│   ├── cursor_client.py   # Common Cursor CLI client
-│   └── README.md
+│   └── cursor_client.py   # Common Cursor CLI client
+├── tests/                  # Test scripts and test plan (run from repo root)
+│   ├── README.md
+│   ├── test_pr_workflow_apply_refresh.py
+│   ├── test_analyzer.sh
+│   ├── test_apply.sh
+│   ├── test_examples.sh
+│   ├── test_gc_only.sh
+│   └── TEST_PLAN_PR_WORKFLOW.md
 ├── requirements.txt        # Python dependencies
 └── README.md
 ```
@@ -160,14 +170,22 @@ python /path/to/actions/analyze-pr-code/code_analyzer.py \
   --prompt-file .github/prompts/analyze-logs.txt
 ```
 
-### Other Actions (Placeholder)
+### Other Actions
 
-The `apply-suggested-logs` and `apply-suggested-gc-resources` actions contain placeholder implementations. To implement:
+- **apply-suggested-logs:** Entry point is `actions/apply-suggested-logs/main.py` (invoked by workflow on `/apply-logs`).
+- **apply-suggested-gc-resources:** Workflow invokes `generate_monitor_yaml.py`, `post_create_monitor_response.py`, `post_dashboard_preview.py`, and `post_create_dashboard_response.py` (see `.github/workflows/pr-automation.yml`).
 
-1. Navigate to the appropriate `main.py` file in `actions/<action-name>/`
-2. Add your implementation following the pattern in `analyze-pr-code/code_analyzer.py`
-3. Add any required dependencies to `requirements.txt`
-4. Test locally before committing
+To extend: add or edit scripts in the relevant `actions/<action-name>/` directory, add dependencies to `requirements.txt`, and test locally.
+
+## Development and testing (dev-only)
+
+The workflow (`.github/workflows/pr-automation.yml`) does **not** run the following; they are for local/manual use only:
+
+- **Test scripts:** [tests/test_pr_workflow_apply_refresh.py](tests/test_pr_workflow_apply_refresh.py), [tests/test_analyzer.sh](tests/test_analyzer.sh), [tests/test_apply.sh](tests/test_apply.sh), [tests/test_examples.sh](tests/test_examples.sh), [tests/test_gc_only.sh](tests/test_gc_only.sh)
+- **Mock/demo data:** `actions/analyze-pr-code/demo-mock-entity-processor.json`, `actions/analyze-pr-code/mock-analysis-results.json`, `actions/apply-suggested-gc-resources/mock-monitor.yaml`
+- **Docs:** All `*.md` under `actions/`, [tests/TEST_PLAN_PR_WORKFLOW.md](tests/TEST_PLAN_PR_WORKFLOW.md), [EXTERNAL_REPO_USAGE.md](EXTERNAL_REPO_USAGE.md)
+
+See [tests/TEST_PLAN_PR_WORKFLOW.md](tests/TEST_PLAN_PR_WORKFLOW.md) for PR workflow testing.
 
 ## Prompts
 
@@ -200,10 +218,9 @@ The workflows and scripts use the following environment variables:
 - `PR_NUMBER` - Pull request number (if provided)
 - `REPOSITORY` - Repository name in format `owner/repo` (if provided)
 
-### Groundcover Alert Creation
-- `ANTHROPIC_API_KEY` - API key for Claude AI analysis
-- `GROUNDCOVER_API_KEY` - API key for groundcover (get via `groundcover auth get-datasources-api-key`)
-- `GROUNDCOVER_API_URL` - (Optional) Base URL for groundcover API (defaults to `https://api.groundcover.com`)
+### Groundcover (apply-suggested-gc-resources)
+- `CURSOR_API_KEY` - Used by `generate_monitor_yaml.py` for AI-generated monitor YAML
+- `GROUNDCOVER_API_KEY` - (Optional) Enables creating monitors via API in `post_create_monitor_response.py`
 
 ## License
 
