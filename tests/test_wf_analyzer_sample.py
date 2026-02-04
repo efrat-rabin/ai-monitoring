@@ -8,6 +8,7 @@ def process_item(item):
 
 def handle_request(req):
     try:
+        logger.info('handling_request', {'request_data': req})
         data = req.get("data")
         return data
     except Exception as e:
