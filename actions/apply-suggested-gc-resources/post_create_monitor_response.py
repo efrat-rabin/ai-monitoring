@@ -8,6 +8,11 @@ from pathlib import Path
 import argparse
 import requests
 
+
+def _log(msg: str, level: str = "INFO") -> None:
+    """Print to stderr so it appears in CI logs; flush so output isn't buffered."""
+    print(f"[{level}] {msg}", file=sys.stderr, flush=True)
+
 # Ensure libs is on path (workflow runs from repo root)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "libs"))
 import github_api  # noqa: E402
@@ -56,7 +61,7 @@ def run_create_monitor(
     try:
         current = _get_comment(github_token, repository, comment_id_int)
     except requests.RequestException as e:
-        print(f"[ERROR] Failed to get comment: {e}")
+        _log(f"Failed to get comment: {e}", "ERROR")
         _post_comment(
             github_token,
             repository,
@@ -67,7 +72,9 @@ def run_create_monitor(
         return 1
 
     in_reply_to_id = current.get("in_reply_to_id")
+    _log(f"Comment {comment_id_int} in_reply_to_id={in_reply_to_id}")
     if not in_reply_to_id:
+        _log("No parent comment (in_reply_to_id missing); posting no-preview message")
         _post_comment(
             github_token,
             repository,
@@ -80,7 +87,7 @@ def run_create_monitor(
     try:
         parent = _get_comment(github_token, repository, in_reply_to_id)
     except requests.RequestException as e:
-        print(f"[ERROR] Failed to get parent comment: {e}")
+        _log(f"Failed to get parent comment: {e}", "ERROR")
         _post_comment(
             github_token,
             repository,
@@ -92,7 +99,9 @@ def run_create_monitor(
 
     parent_body = parent.get("body", "")
     yaml_str = _extract_yaml_from_comment_body(parent_body)
+    _log(f"Extracted YAML length: {len(yaml_str)} chars")
     if not yaml_str.strip():
+        _log("No YAML in parent comment; posting no-YAML message")
         _post_comment(
             github_token,
             repository,
@@ -110,7 +119,7 @@ _Created by AI automation 🤖_"""
 
     api_key = os.getenv("GROUNDCOVER_API_KEY")
     if not api_key:
-        print("[INFO] GROUNDCOVER_API_KEY not set; posting no-permission message")
+        _log("GROUNDCOVER_API_KEY not set; posting no-permission message")
         _post_comment(github_token, repository, pr_number, comment_id_int, no_permission_body)
         return 0
 
@@ -121,7 +130,7 @@ _Created by AI automation 🤖_"""
         client = GroundcoverClient()
         result = client.create_monitor_from_yaml(yaml_str)
         if verbose:
-            print(f"[DEBUG] GroundCover API response: {result}")
+            _log(f"GroundCover API response: {result}", "DEBUG")
 
         monitor_url = GROUNDCOVER_MONITORS_URL
         if isinstance(result, dict):
@@ -135,32 +144,45 @@ _Created by AI automation 🤖_"""
 
 _Created by AI automation 🤖_"""
         _post_comment(github_token, repository, pr_number, comment_id_int, success_body)
-        print("✓ Monitor created and success comment posted")
+        _log("Monitor created and success comment posted")
         return 0
     except Exception as e:
-        print(f"[WARN] Monitor creation failed: {e}")
+        _log(f"Monitor creation failed: {e}", "WARN")
         _post_comment(github_token, repository, pr_number, comment_id_int, no_permission_body)
         return 0
 
 
 def main():
+    _log("post_create_monitor_response.py started")
     parser = argparse.ArgumentParser(description="Create monitor in GroundCover or post manual instructions")
     add_common_pr_args(parser)
     args = parser.parse_args()
+    _log(f"Args: pr_number={args.pr_number} repository={args.repository} comment_id={args.comment_id}")
 
     verbose = is_verbose()
     github_token = require_github_token()
     if not github_token:
+        _log("GITHUB_TOKEN missing or invalid; exiting", "ERROR")
         return 1
+    _log("GITHUB_TOKEN present; fetching comment and creating monitor")
 
-    return run_create_monitor(
+    exit_code = run_create_monitor(
         github_token,
         args.repository,
         int(args.pr_number),
         args.comment_id,
         verbose=verbose,
     )
+    _log(f"Exiting with code {exit_code}")
+    return exit_code
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except Exception as e:
+        _log(f"Unhandled exception: {e}", "ERROR")
+        import traceback
+
+        traceback.print_exc(file=sys.stderr)
+        sys.exit(1)
