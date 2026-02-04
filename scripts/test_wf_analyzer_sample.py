@@ -8,6 +8,7 @@ def process_item(item):
 
 def handle_request(req):
     try:
+        logger.info('handling_request', {'request_keys': list(req.keys()) if hasattr(req, 'keys') else None})
         data = req.get("data")
         return data
     except Exception:
